@@ -43,8 +43,8 @@ $link-color: #4265DC;
 @import "minima";
 ```
 
-當 jekyll 在 build 時，`<source>/assets/` 的優先度高於 `<theme gem>/assets/`，因此可以在 `<source>/assets/` 指定想要覆蓋掉的 styling；對於其他資料夾（like `_includes`, `_layout` ... etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了！
+當 jekyll 在 build 時，`<source>/assets/` 的優先度高於 `<theme gem>/assets/`，因此可以在 `<source>/assets/` 指定想要覆蓋掉的 styling；對於其他資料夾（like `_includes`, `_layout` ... etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了。
+
+最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 `<username>.github.io` 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時）
 
 Reference: [Themes Configuration](https://jekyllrb.com/docs/themes/)
-
-> 之後應該會繼續新增 deploy 的紀錄
