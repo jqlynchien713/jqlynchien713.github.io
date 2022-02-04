@@ -2,8 +2,7 @@
 layout: post
 title: 在 Github Pages 上使用 Jekyll 4
 date: 2022-02-04 19:46 +0800
-category: update
-tag: jekyll deploy
+tags: jekyll deploy update
 ---
 
 真的是要累鼠...，才剛寫完一篇 Vim 想說加點酷酷ㄉ功能，結果馬上給我跑一堆問題出來：））

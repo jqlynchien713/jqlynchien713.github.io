@@ -2,8 +2,7 @@
 layout: post
 title:  "部落格開始營業！（還有一些 Jekyll 的設定）"
 date:   2022-02-03 16:34:53 +0800
-categories: jekyll update
-tag: jekyll
+tags: jekyll update
 ---
 今天終於下定決心好好搞這件事了，之後會把學到的重要東西都記錄在這
 

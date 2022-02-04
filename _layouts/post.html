@@ -9,7 +9,7 @@ layout: default
     <time class="dt-published" datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
       {%- assign date_format = site.minima.date_format | default: "%b %-d, %Y" -%}
       {{ page.date | date: date_format }}
-| 👀
+      | 👀
       <span class="reading-time" title="Estimated read time">
         {% assign words = content | number_of_words: "auto" %}
         {% if words < 150 %}
@@ -19,6 +19,11 @@ layout: default
                                  {% endif %}
       </span>
     </time>
+    |
+    {% for t in page.tags %}
+      <span class="tag">{{t}}</span>
+    {% endfor %}
+
     {%- if page.author -%}
     • <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span class="p-author h-card" itemprop="name">{{ page.author }}</span></span>
     {%- endif -%}</p>

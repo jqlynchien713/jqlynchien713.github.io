@@ -18,6 +18,10 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 
+header_pages:
+  - tags.md
+  - about.md
+
 excerpt_separator: <!--more-->
 title: Joanna's Blog
 email: joannachou713@gmail.com
@@ -62,5 +66,4 @@ kramdown:
 jekyll_compose:
   default_front_matter:
     posts:
-      category: update
-      tag:
+      tags: update

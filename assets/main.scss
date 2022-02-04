@@ -6,7 +6,9 @@
 $base-font-family: 'Roboto Mono', monospace;
 $base-font-weight: 300;
 $brand-color: #9F88FF;
-$code-bg: #E6FAFA;
+$code-bg: #E1F5F5;
+$tag-bg: #E1E5FF;
+$tag-color: #707280;
 $link-color: #46CFC5;
 
 .rss-subscribe > a, a.u-email, span.username{
@@ -46,6 +48,19 @@ ul {
   & > ul *:visited{
     color: darken($brand-color, 15%);
   }
+}
+
+.post-content.page > ul * {
+  color: $brand-color;
+  font-weight: 300;
+}
+
+.tag{
+  font-size: 13px;
+  background-color: $tag-bg;
+  color: $tag-color;
+  border-radius: 5px;
+  padding: 0 4px;
 }
 
 @import "minima";
