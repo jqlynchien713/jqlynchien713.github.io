@@ -20,4 +20,32 @@ li.task-list-item{
   list-style: none;
 }
 
+.highlighter-rouge{
+  font-family: $base-font-family;
+  padding: 0 2px;
+}
+
+code{
+  font-family: $base-font-family;
+  border-radius: 5px;
+}
+
+.highlight{
+  border-radius: 5px;
+}
+
+ul {
+  list-style-type: circle;
+}
+
+.sidebar{
+  & > ul *{
+    color: $brand-color;
+  }
+
+  & > ul *:visited{
+    color: darken($brand-color, 15%);
+  }
+}
+
 @import "minima";
