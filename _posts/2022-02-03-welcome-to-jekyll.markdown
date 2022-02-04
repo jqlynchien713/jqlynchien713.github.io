@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "部落格開張！（與一些 Jekyll 設定）"
+title:  "部落格開始營業！（還有一些 Jekyll 的設定）"
 date:   2022-02-03 16:34:53 +0800
 categories: jekyll update
 tag: jekyll
@@ -48,4 +48,6 @@ $link-color: #4265DC;
 
 最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 `<username>.github.io` 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時）
 
-Reference: [Themes Configuration](https://jekyllrb.com/docs/themes/)
+
+<font color="grey" style="font-size: 24px">Reference</font>
+* [Themes Configuration](https://jekyllrb.com/docs/themes/)
