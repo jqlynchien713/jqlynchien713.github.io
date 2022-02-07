@@ -43,6 +43,7 @@ ul {
 .sidebar{
   & > ul *{
     color: $brand-color;
+    font-weight: 300;
   }
 
   & > ul *:visited{
