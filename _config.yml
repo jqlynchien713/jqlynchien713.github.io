@@ -50,7 +50,7 @@ utterances:
   repo:                "joannachou713/joannachou713.github.io"
   issue-term:          "pathname"
   label:               "Comments"
-  theme:               "dark-blue"
+  theme:               "github-light"
 
 
 # Exclude from processing.
