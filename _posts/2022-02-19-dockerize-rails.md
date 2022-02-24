@@ -2,7 +2,7 @@
 layout: post
 title: Dockerize Rails App (施工中...)
 date: 2022-02-19 22:51 +0800
-tags: update deploy docker-compose
+tags: update deploy docker-compose rails
 ---
 終於補到這篇了！需要 Dockerize 的原因很簡單，因為本地環境被我自己搞爆了😀 簡單來說就是我七八月時開發的專案，隔了四個月之後再回來繼續支援時，發現整個環境出一堆問題（基本上都是 M1 chips 相關的），不管怎麼改環境設定，下完指令之後永遠都會 crash，修到最後我也懶得繼續找原因了，想說剛學過 Docker，其他資深的同事們也有這樣搞過，就想說不然我也來試試看吧：）
 
