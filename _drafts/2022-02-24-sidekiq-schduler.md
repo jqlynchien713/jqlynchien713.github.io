@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Rails with sidekiq-schduler 實作 cron jobs 設定
+title: Rails with sidekiq-schduler 實作 cron jobs 設定（施工中...）
 date: 2022-02-24 18:11 +0800
 tags: update rails
 ---
