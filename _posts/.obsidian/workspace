@@ -1,0 +1,93 @@
+{
+  "main": {
+    "id": "3df7ad986f7e51d6",
+    "type": "split",
+    "children": [
+      {
+        "id": "08c567b6e0c2a244",
+        "type": "leaf",
+        "state": {
+          "type": "markdown",
+          "state": {
+            "file": "2022-02-23-utterances.md",
+            "mode": "source"
+          }
+        }
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "86a5a84cf0b89e45",
+    "type": "split",
+    "children": [
+      {
+        "id": "5a324dc6b06e0b0f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4b4e036d0ddeabdf",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {}
+            }
+          },
+          {
+            "id": "bf71b77ec70b2188",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7c01bc78788ee592",
+    "type": "split",
+    "children": [
+      {
+        "id": "c1f3d8b1885ddbea",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b0f68a9d75986db8",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "2022-02-23-utterances.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "active": "08c567b6e0c2a244",
+  "lastOpenFiles": [
+    "2022-02-23-utterances.md"
+  ]
+}

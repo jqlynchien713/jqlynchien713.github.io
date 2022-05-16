@@ -4,14 +4,47 @@ title: Rails with sidekiq-schduler 實作 cron jobs 設定（施工中...）
 date: 2022-02-24 18:11 +0800
 tags: update rails
 ---
+## Sidekiq-scheduler
+### Configuration
+- Gemfile 加上 sidekiq-scheduler
+- `application.rb`  裡設定：`config.active_job.queue_adapter = :sidekiq`
+- 專案裡沒有用 sidekiq 的情況下要使用 sidekiq-scheduler 的設定：新增 initializer: `config/initializers/sidekiq_scheduler.rb` [[Ref]](https://github.com/moove-it/sidekiq-scheduler#manage-tasks-from-unicornrails-server)
+- 設定完後可以進入 Sidekiq webui 確認是否有連線成功：`https://localhost:3000/sidekiq`
+    - 預設帳號密碼：admin/admin
 
-### Implementations
 
-- sidekiq-cron → sidekiq-schedule
-    - [How to create scheduled jobs using sidekiq-cron](https://medium.com/geekculture/how-to-create-scheduled-jobs-in-rails-using-sidekiq-cron-dc5dee27eae5)
-    - https://github.com/moove-it/sidekiq-scheduler
-- ActiveJobs
+### YAML 設定 cron job
+在專案裡的 `config/sidekiq.yml` 基本設定下，可以新增一個叫做 `:schedule` 的項目，下面可以列出所有要加入排程的 ActiveJobs，基本上只要填入 Job name、設定排成時間以及該 job 要填入的 queue name 就行了：
 
+```yaml
+:schedule:
+  RemindJob:
+  # Job name will be taken as worker class name by default
+    cron: "0 12 * * *"
+    queue: booking
+
+  CancelJob:
+    cron: "0,30 * * * *"
+    queue: booking
+
+```
+
+都設定完之後可以在 rails console 下 `sidekiq.get_schedule` 來檢查 Jobs 有無成功被加入排程中。
+
+## ActiveJobs
+### 基本設定
+### Querying Json Binary
+### 撰寫測試
+1. `around` & `travel_to`
+2. ActiveRecord `reload`
+
+## Overmind
+### Installation
+### Start Servers
+### Byebug Usage
+
+
+---
 ### Config
 
 - 使用 Overmind 一次啟動 Web/Sidekiq/Webpacker（Overmind 可以用 byebug）
@@ -24,7 +57,7 @@ tags: update rails
     - ~~新增 hospital~~ 或修改門診時段時，檢查有要執行檢查的時間列表(`Sidekiq.get_schedule`) ，沒有在列表裡的話就新增 cron job → 應該是只針對一家醫院
 - ActiveRecord/ActiveModel**::Dirty**
     - ~~到底為啥改不動😀🔪~~
-    - ****`saved_change_to_attribute(attr_name)`****
+    - **`saved_change_to_attribute(attr_name)`**
     - `name_changed?`
 - Difference between service and job
     - service: 簡化程式、重複使用
@@ -65,13 +98,6 @@ tags: update rails
 ---
 
 ### Sidekiq-scheduler
-
-- Sidekiq webui: `https://localhost:3000/sidekiq`
-    - 帳號密碼：admin/admin
-- ~~新增 initializer: `config/initializers/sidekiq_scheduler.rb` [[Ref]](https://github.com/moove-it/sidekiq-scheduler#manage-tasks-from-unicornrails-server)~~  → 這是沒有用 sidekiq 的情況下要用 sidekiq-scheduler 的寫法
-- sidekiq 內容跟 rails job 還沒有接起來（sidekiq log 上有 cron job 的紀錄）
-    - 要在 `application.rb`  裡設定：`config.active_job.queue_adapter = :sidekiq`
-
 設定成功囉！
 
 ---
