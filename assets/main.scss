@@ -16,6 +16,10 @@ $tag-bg: #E1E5FF;
 $tag-color: #707280;
 $link-color: #46CFC5;
 
+body{
+  letter-spacing: 1px;
+}
+
 .rss-subscribe > a, a.u-email, span.username{
   color: $brand-color;
   &:visited{
