@@ -24,14 +24,14 @@ header_pages:
 
 excerpt_separator: <!--more-->
 title: Joanna's Blog
-email: joannachou713@gmail.com
+email: jqlynchien713@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   ʕ •ᴥ•ʔ
-domain: joannachou713.github.io
+domain: jqlynchien713.github.io
 baseurl: "" # the subpath of your site, e.g. /blog
-url: https://joannachou713.github.io # the base hostname & protocol for your site, e.g. http://example.com
+url: https://jqlynchien713.github.io # the base hostname & protocol for your site, e.g. http://example.com
 # twitter_username: jekyllrb
-github_username:  joannachou713
+github_username:  jqlynchien713
 
 # Build settings
 theme: minima
@@ -47,7 +47,7 @@ comments:
 # Make sure all variables are set properly. Check below link for detail.
 # https://utteranc.es/
 utterances:
-  repo:                "joannachou713/joannachou713.github.io"
+  repo:                "jqlynchien713/jqlynchien713.github.io"
   issue-term:          "pathname"
   label:               "Comments"
   theme:               "github-light"

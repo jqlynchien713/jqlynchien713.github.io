@@ -47,7 +47,7 @@ tags: update jekyll
   # Make sure all variables are set properly. Check below link for detail.
   # https://utteranc.es/
   utterances:
-    repo:                "joannachou713/joannachou713.github.io"
+    repo:                "jqlynchien713/jqlynchien713.github.io"
     issue-term:          "pathname"
     label:               "Comments"
     theme:               "github-light"
