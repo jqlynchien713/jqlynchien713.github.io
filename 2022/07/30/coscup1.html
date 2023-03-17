@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Deploy Rails with Docker Swarm (1) - 工具介紹 | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="Deploy Rails with Docker Swarm (1) - 工具介紹" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="COSCUP 安全下莊！（大概） 因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是工具介紹、實作流程、其他議題（就是實際簡報的 mapping），這邊也附上實際報告的簡報以及我實作的 Repository，接下來就進入正題ㄅ！ Docker Swarm Structure Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。 當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。 Scalability &amp; Availability Feature 首先來比較一下這兩項特性定義上的差異： Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減 Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance） Docker Swarm 達到這兩項特性的方法如下： Scalability：自動在空間足夠的 worker 上開啟新的 container Availability：以更新 app、降低 downtime 為例 當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上 漸進式取代所有舊版的 app container Deploy Tools: Stack vs Compose 當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同： 都使用 compose format 進行 deploy，但是 stack 只支援版本三以上 Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作 Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果 Compose 相較之下更適合用於開發環境 名詞解釋: Service vs Task Task：各個實體機上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡 Service：一個 image 所提供的服務，like: app/redis/postgres 所有 service 的總和稱為 stack Traefik Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點： 與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label 下面 自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序 無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上 有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去 AWS EC2 就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具： AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。 Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本） Route53：路由服務 會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address） 可以創建許多型態的 record，定義 sub-domain" />
+<meta property="og:description" content="COSCUP 安全下莊！（大概） 因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是工具介紹、實作流程、其他議題（就是實際簡報的 mapping），這邊也附上實際報告的簡報以及我實作的 Repository，接下來就進入正題ㄅ！ Docker Swarm Structure Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。 當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。 Scalability &amp; Availability Feature 首先來比較一下這兩項特性定義上的差異： Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減 Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance） Docker Swarm 達到這兩項特性的方法如下： Scalability：自動在空間足夠的 worker 上開啟新的 container Availability：以更新 app、降低 downtime 為例 當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上 漸進式取代所有舊版的 app container Deploy Tools: Stack vs Compose 當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同： 都使用 compose format 進行 deploy，但是 stack 只支援版本三以上 Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作 Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果 Compose 相較之下更適合用於開發環境 名詞解釋: Service vs Task Task：各個實體機上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡 Service：一個 image 所提供的服務，like: app/redis/postgres 所有 service 的總和稱為 stack Traefik Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點： 與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label 下面 自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序 無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上 有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去 AWS EC2 就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具： AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。 Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本） Route53：路由服務 會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address） 可以創建許多型態的 record，定義 sub-domain" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/07/30/coscup1.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/07/30/coscup1.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-30T10:19:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Deploy Rails with Docker Swarm (1) - 工具介紹" />
+<script type="application/ld+json">
+{"description":"COSCUP 安全下莊！（大概） 因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是工具介紹、實作流程、其他議題（就是實際簡報的 mapping），這邊也附上實際報告的簡報以及我實作的 Repository，接下來就進入正題ㄅ！ Docker Swarm Structure Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。 當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。 Scalability &amp; Availability Feature 首先來比較一下這兩項特性定義上的差異： Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減 Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance） Docker Swarm 達到這兩項特性的方法如下： Scalability：自動在空間足夠的 worker 上開啟新的 container Availability：以更新 app、降低 downtime 為例 當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上 漸進式取代所有舊版的 app container Deploy Tools: Stack vs Compose 當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同： 都使用 compose format 進行 deploy，但是 stack 只支援版本三以上 Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作 Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果 Compose 相較之下更適合用於開發環境 名詞解釋: Service vs Task Task：各個實體機上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡 Service：一個 image 所提供的服務，like: app/redis/postgres 所有 service 的總和稱為 stack Traefik Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點： 與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label 下面 自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序 無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上 有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去 AWS EC2 就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具： AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。 Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本） Route53：路由服務 會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address） 可以創建許多型態的 record，定義 sub-domain","url":"https://jqlynchien713.github.io/2022/07/30/coscup1.html","headline":"Deploy Rails with Docker Swarm (1) - 工具介紹","@type":"BlogPosting","dateModified":"2022-07-30T10:19:00+00:00","datePublished":"2022-07-30T10:19:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/07/30/coscup1.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Deploy Rails with Docker Swarm (1) - 工具介紹</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-07-30T10:19:00+00:00" itemprop="datePublished">Jul 30, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 11 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">COSCUP</span>
+    
+      <span class="tag">docker-swarm</span>
+    
+      <span class="tag">traefik</span>
+    
+      <span class="tag">deploy</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#docker-swarm">Docker Swarm</a><ul><li><a href="#structure">Structure</a></li><li><a href="#scalability--availability-feature">Scalability &amp; Availability Feature</a></li><li><a href="#deploy-tools-stack-vs-compose">Deploy Tools: Stack vs Compose</a></li><li><a href="#名詞解釋-service-vs-task">名詞解釋: Service vs Task</a></li></ul></li><li><a href="#traefik">Traefik</a></li><li><a href="#aws">AWS</a><ul><li><a href="#ec2">EC2</a></li><li><a href="#route53路由服務">Route53：路由服務</a></li></ul></li></ul></div>
+    <p>COSCUP 安全下莊！（大概）</p>
+
+<p>因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是<strong>工具介紹</strong>、<strong>實作流程</strong>、<strong>其他議題</strong>（就是實際簡報的 mapping），這邊也附上實際報告的<a href="https://docs.google.com/presentation/d/1c1ip0DacaPZ8jKVLdtDPkB1ud3qiH44mp8TscCdTbD4/edit?usp=sharing">簡報</a>以及我實作的 <a href="https://gitlab.com/jqlynchien713/task-manager-ruby">Repository</a>，接下來就進入正題ㄅ！</p>
+
+<h2 id="docker-swarm">Docker Swarm</h2>
+
+<h3 id="structure">Structure</h3>
+
+<p>Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。</p>
+
+<p>當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。</p>
+
+<p><img src="/assets/img/swarm.png" alt="Work.jpg" /></p>
+
+<h3 id="scalability--availability-feature">Scalability &amp; Availability Feature</h3>
+
+<p>首先來比較一下這兩項特性定義上的差異：</p>
+
+<ul>
+  <li>Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減</li>
+  <li>Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance）</li>
+</ul>
+
+<p>Docker Swarm 達到這兩項特性的方法如下：</p>
+
+<ol>
+  <li>Scalability：自動在空間足夠的 worker 上開啟新的 container</li>
+  <li>Availability：以更新 app、降低 downtime 為例
+    <ol>
+      <li>當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上</li>
+      <li>漸進式取代所有舊版的 app container</li>
+    </ol>
+  </li>
+</ol>
+
+<h3 id="deploy-tools-stack-vs-compose">Deploy Tools: Stack vs Compose</h3>
+
+<p>當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同：</p>
+
+<ol>
+  <li>都使用 compose format 進行 deploy，但是 stack 只支援版本三以上</li>
+  <li>Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作</li>
+  <li>Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果</li>
+  <li>Compose 相較之下更適合用於開發環境</li>
+</ol>
+
+<h3 id="名詞解釋-service-vs-task">名詞解釋: Service vs Task</h3>
+
+<ul>
+  <li>Task：各個<strong>實體機</strong>上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡</li>
+  <li>Service：一個 image 所提供的服務，like: app/redis/postgres</li>
+  <li>所有 service 的總和稱為 stack</li>
+</ul>
+
+<p><img src="https://docs.docker.com/engine/swarm/images/services-diagram.png" alt="https://docs.docker.com/engine/swarm/images/services-diagram.png" /></p>
+
+<h2 id="traefik">Traefik</h2>
+
+<p>Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點：</p>
+
+<ol>
+  <li>與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label  下面</li>
+  <li>自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序</li>
+  <li>無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上</li>
+  <li>有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去</li>
+</ol>
+
+<h2 id="aws">AWS</h2>
+
+<h3 id="ec2">EC2</h3>
+
+<p>就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具：</p>
+
+<ul>
+  <li>AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。</li>
+  <li>Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本）</li>
+</ul>
+
+<h3 id="route53路由服務">Route53：路由服務</h3>
+
+<ul>
+  <li>會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address）</li>
+  <li>可以創建許多型態的 record，定義 sub-domain</li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/07/30/coscup1.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>SSH to EC2 with Auto Assigned Certificates | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="SSH to EC2 with Auto Assigned Certificates" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 ssh i-[EC2 id] 就能連到 EC2 裡ㄌ，比原本的方法方便許多！ Create qualified EC2 在 EC2 的部分，主要是需要將 Session Manager 的 role 指定給我們想要連線的 EC2 Create new EC2 instances(optional) Assigning IAM role with Session Manager access Policy name: AmazonEC2RoleforSSM 新增使用者 同時我們必須要指定，今天連進 EC2 的是哪一個 user 在 AWS IAM 新增一個 user，該 user 要有 AdministratorAccess aws configure --profile default 新增一個 default 的 aws user USER_KEY = [Access key ID] USER_SECRET = [Secret access key] 設定本地端 SSH 最後就是比較麻煩的 ssh 設定，參考下面的這個 script Ref: https://github.com/qoomon/aws-ssm-ec2-proxy-command 複製 aws-ssm-ec2-proxy-command.sh 到 .ssh 下 chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh 實際使用：以 default IAM user 連進 EC2 AWS_PROFILE=default ssh ec2-user@i-0c45c33713e830c9d \ -i &quot;~/.ssh/id_ed25519&quot; \ -o ProxyCommand=&quot;~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub&quot; 加入 .ssh/config host i-* mi-* User ec2-user IdentityFile ~/.ssh/id_ed25519 ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub StrictHostKeyChecking no 設定完後與 EC2 連線：ssh i-072f2dd63ae1189e9 完成啦！！！🥳🥳🥳🥳" />
+<meta property="og:description" content="在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 ssh i-[EC2 id] 就能連到 EC2 裡ㄌ，比原本的方法方便許多！ Create qualified EC2 在 EC2 的部分，主要是需要將 Session Manager 的 role 指定給我們想要連線的 EC2 Create new EC2 instances(optional) Assigning IAM role with Session Manager access Policy name: AmazonEC2RoleforSSM 新增使用者 同時我們必須要指定，今天連進 EC2 的是哪一個 user 在 AWS IAM 新增一個 user，該 user 要有 AdministratorAccess aws configure --profile default 新增一個 default 的 aws user USER_KEY = [Access key ID] USER_SECRET = [Secret access key] 設定本地端 SSH 最後就是比較麻煩的 ssh 設定，參考下面的這個 script Ref: https://github.com/qoomon/aws-ssm-ec2-proxy-command 複製 aws-ssm-ec2-proxy-command.sh 到 .ssh 下 chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh 實際使用：以 default IAM user 連進 EC2 AWS_PROFILE=default ssh ec2-user@i-0c45c33713e830c9d \ -i &quot;~/.ssh/id_ed25519&quot; \ -o ProxyCommand=&quot;~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub&quot; 加入 .ssh/config host i-* mi-* User ec2-user IdentityFile ~/.ssh/id_ed25519 ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub StrictHostKeyChecking no 設定完後與 EC2 連線：ssh i-072f2dd63ae1189e9 完成啦！！！🥳🥳🥳🥳" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/06/05/aws-ssh.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/06/05/aws-ssh.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-06-05T08:24:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="SSH to EC2 with Auto Assigned Certificates" />
+<script type="application/ld+json">
+{"description":"在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 ssh i-[EC2 id] 就能連到 EC2 裡ㄌ，比原本的方法方便許多！ Create qualified EC2 在 EC2 的部分，主要是需要將 Session Manager 的 role 指定給我們想要連線的 EC2 Create new EC2 instances(optional) Assigning IAM role with Session Manager access Policy name: AmazonEC2RoleforSSM 新增使用者 同時我們必須要指定，今天連進 EC2 的是哪一個 user 在 AWS IAM 新增一個 user，該 user 要有 AdministratorAccess aws configure --profile default 新增一個 default 的 aws user USER_KEY = [Access key ID] USER_SECRET = [Secret access key] 設定本地端 SSH 最後就是比較麻煩的 ssh 設定，參考下面的這個 script Ref: https://github.com/qoomon/aws-ssm-ec2-proxy-command 複製 aws-ssm-ec2-proxy-command.sh 到 .ssh 下 chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh 實際使用：以 default IAM user 連進 EC2 AWS_PROFILE=default ssh ec2-user@i-0c45c33713e830c9d \\ -i &quot;~/.ssh/id_ed25519&quot; \\ -o ProxyCommand=&quot;~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub&quot; 加入 .ssh/config host i-* mi-* User ec2-user IdentityFile ~/.ssh/id_ed25519 ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub StrictHostKeyChecking no 設定完後與 EC2 連線：ssh i-072f2dd63ae1189e9 完成啦！！！🥳🥳🥳🥳","url":"https://jqlynchien713.github.io/2022/06/05/aws-ssh.html","headline":"SSH to EC2 with Auto Assigned Certificates","@type":"BlogPosting","dateModified":"2022-06-05T08:24:00+00:00","datePublished":"2022-06-05T08:24:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/06/05/aws-ssh.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">SSH to EC2 with Auto Assigned Certificates</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-06-05T08:24:00+00:00" itemprop="datePublished">Jun 5, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 3 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">aws</span>
+    
+      <span class="tag">ec2</span>
+    
+      <span class="tag">ssh</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#create-qualified-ec2">Create qualified EC2</a></li><li><a href="#新增使用者">新增使用者</a></li><li><a href="#設定本地端-ssh">設定本地端 SSH</a></li></ul></div>
+    <p>在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 <code class="language-plaintext highlighter-rouge">ssh i-[EC2 id]</code> 就能連到 EC2 裡ㄌ，比原本的方法方便許多！</p>
+<h2 id="create-qualified-ec2">Create qualified EC2</h2>
+<p>在 EC2 的部分，主要是需要將 Session Manager 的 <em>role</em> 指定給我們想要連線的 EC2</p>
+<ul>
+  <li>Create new EC2 instances(optional)</li>
+  <li>Assigning IAM role with Session Manager access
+    <ul>
+      <li>Policy name: <code class="language-plaintext highlighter-rouge">AmazonEC2RoleforSSM</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="新增使用者">新增使用者</h2>
+<p>同時我們必須要指定，今天連進 EC2 的是哪一個 <em>user</em></p>
+<ul>
+  <li>在 AWS IAM 新增一個 user，該 user 要有 <code class="language-plaintext highlighter-rouge">AdministratorAccess</code></li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">aws configure --profile default</code> 新增一個 default 的 aws user</p>
+
+    <p><img src="/assets/img/key-sec.png" alt="截圖 2022-06-05 15.57.54.png" /></p>
+
+    <ul>
+      <li>USER_KEY = <code class="language-plaintext highlighter-rouge">[Access key ID]</code></li>
+      <li>USER_SECRET = <code class="language-plaintext highlighter-rouge">[Secret access key]</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="設定本地端-ssh">設定本地端 SSH</h2>
+<p>最後就是比較麻煩的 ssh 設定，參考下面的這個 script</p>
+<ul>
+  <li>Ref:  https://github.com/qoomon/aws-ssm-ec2-proxy-command</li>
+  <li>複製 <a href="https://github.com/qoomon/aws-ssm-ec2-proxy-command/blob/master/aws-ssm-ec2-proxy-command.sh">aws-ssm-ec2-proxy-command.sh</a> 到 <code class="language-plaintext highlighter-rouge">.ssh</code> 下</li>
+  <li><code class="language-plaintext highlighter-rouge">chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh</code></li>
+  <li>
+    <p>實際使用：以 default IAM user 連進 EC2</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">AWS_PROFILE</span><span class="o">=</span>default ssh ec2-user@i-0c45c33713e830c9d <span class="se">\</span>
+  <span class="nt">-i</span> <span class="s2">"~/.ssh/id_ed25519"</span> <span class="se">\</span>
+  <span class="nt">-o</span> <span class="nv">ProxyCommand</span><span class="o">=</span><span class="s2">"~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub"</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>加入 <code class="language-plaintext highlighter-rouge">.ssh/config</code></p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>host i-<span class="k">*</span> mi-<span class="k">*</span>
+  User ec2-user
+  IdentityFile ~/.ssh/id_ed25519
+  ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub
+  StrictHostKeyChecking no
+</code></pre></div>    </div>
+  </li>
+  <li>設定完後與 EC2 連線：<code class="language-plaintext highlighter-rouge">ssh i-072f2dd63ae1189e9</code></li>
+</ul>
+
+<p>完成啦！！！🥳🥳🥳🥳</p>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/06/05/aws-ssh.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

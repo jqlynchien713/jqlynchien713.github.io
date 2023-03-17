@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>30 天從 VScode 到 Vim | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="30 天從 VScode 到 Vim" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="2021 年最大的轉變應該就是接觸到了現在的編輯器之神，年初的時候上了資科系蔡銘峰老師開的網路搜索與探勘，第一次看到 Vim 這個編輯器，還有老師跟鬼一樣的操作，讓我默默下定決心要向老師看齊（這堂課又是另一個充實的故事了）；不過自己下去學真的門檻太高，在去年四五月之後就被我暫時擱置在一邊了，直到五月找到實習，七月正式到公司上班之後發現老天，幾乎一半的同事都用 Vim 在開發（包括老闆本人），再加上某個週五的快樂分享會，有位同事分享了他是怎麼從 VScode 轉換到 Vim 上的，我才真正下定決心去把 Vim 學好（畢竟升碩一的暑假也是真的很閒沒錯） Vim 基本操作 所有基本操作我都是看這組教學影片學的，再搭配蔡老師在課堂上介紹 vgod 的 vim 配置和 cheatsheet，如下圖。 基本上如果每天都有在寫程式，每天都逼自己使用 Vim 的話，大概十幾天之後就能夠熟悉基本的操作，接下來就是處理設定檔與外掛的部分。當初我在設定時也是搞得很頭痛，因為最當初什麼都還不懂時就直接使用 vgod 的設定檔，導致操作真的上手之後很多設定其實不是我要的，於是最後我把設定檔全部刪掉，連 Vim 也重新安裝，才真正開始重新設定我的 Vim。 裝外掛囉！ 雖然很像幹話，但在裝外掛的前提是要搞清楚自己想要的功能到底有什麼，不然跟著大家一起亂裝到最後有些功能也許到死都不會用到。像在剛切換到 Vim 之前，我才體會到 VScode 上的 Cmd+P 這個功能有多方便，可以不用從側邊的檔案欄一個一個資料夾慢慢找檔案；像是這樣子的思考方式，可以更快找到想要並且需要的外掛，所以之後我參考了這個影片、並列出了下面幾項我需要的功能，還有對應到我最後找到的外掛： 想要的功能 外掛本人 Tabnine(Auto Complete) Coc 裡的 Tabnine Ctrl / 單行/多行註解 NERDCommenter Ctrl P 尋找檔案 CtrlP File tree viewer NERDTreeDevicons Git status Git Gutter 好看的主題 Airline(優化基本介面)VScode Horizon Theme 而我在 Vim 上使用的外掛管理工具是 Pathogen，因為在安裝時只要把外掛的 github repo clone 到 autoload/ 的資料夾裡就好，不用在 .vimrc 裡新增初始化的設定（當然如果要改外掛初始設定還是得修改）讓我覺得很方便也很好理解。 其他設定 Keymapping 不得不說 Keymapping 真的是很方便的設定，讓我可以完全把在 VScode 上習慣的快速鍵直接搬過來用，這也是一些外掛（像 CtrlP）的運作基礎。舉例來說 nnoremap &lt;Right&gt; &lt;Nop&gt; 的意思是，在 Normal mode 下，&lt;Right&gt; key 要對應成 &lt;Nop&gt; 也就是沒有動作（當初在學基本操作時為了強迫自己記得而設定的），而如果要改在 Visual mode 的 keymapping 的話只需要把 nnoremap 改成 vnoremap 就行了，其中的 nore 代表的則是 no recursive，避免無窮迴圈。 這邊我主要是設定輸入 ( [ &#39; &quot; 就會自動跳出 ) ] &#39; &quot;，還有輸入 { 後如果接的是 &lt;Enter&gt; 就自動補上 }，{{ 自動生成成對的大括號 {} inoremap ( ()&lt;Esc&gt;i inoremap &quot; &quot;&quot;&lt;Esc&gt;i inoremap &#39; &#39;&#39;&lt;Esc&gt;i inoremap [ []&lt;Esc&gt;i inoremap {&lt;CR&gt; {&lt;CR&gt;}&lt;Esc&gt;ko inoremap {{ {}&lt;ESC&gt;i 外掛設定 接下來就是我對外掛設定的 keymapping，這邊真的蠻複雜的，查了一堆資料才把這些設定搞好🥲 NERDTree Ctrl E 開啟 NERDTree 忽略 node_modules/ 在 NERDTree highlight 當前開啟的檔案 nnoremap &lt;C-E&gt; :NERDTreeToggle&lt;CR&gt; let g:NERDTreeIgnore = [&#39;^node_modules$&#39;] autocmd BufRead * call SyncTree() NERDTree + CtrlP Sync 在查外掛設定時看到了一個很酷的功能，就是當 NERDTree 是開啟時執行 CtrlP 尋找檔案，當選取檔案開啟後同步更新 NERDTree 的展開結構，這個行為跟 VScode 裡的 Ctrl P 行為幾乎是一模一樣了！不過因為原作者寫的 IsNERDTreeOpen 有點問題，沒辦法正確判斷 NERDTree 是否開啟，後來上網查了一堆資料才改成下面的結果（註解的部分是原作者的 code），不過因為是很久以前改的，我也沒有留連結，只記得是在 StackExchange 上看到的😢（再不寫紀錄啊） &quot; CtrlP + NERDTree &quot; sync open file with NERDTree &quot; Check if NERDTree is open or active function! IsNERDTreeOpen() return exists(&quot;g:NERDTree&quot;) &amp;&amp; g:NERDTree.IsOpen() &quot;exists(&quot;t:NERDTreeBufName&quot;) &amp;&amp; (bufwinnr(t:NERDTreeBufName) != -1) endfunction &quot; Call NERDTreeFind iff NERDTree is active, current window contains a modifiable &quot; file, and we&#39;re not in vimdiff function! SyncTree() if &amp;modifiable &amp;&amp; IsNERDTreeOpen() &amp;&amp; strlen(expand(&#39;%&#39;)) &gt; 0 &amp;&amp; !&amp;diff NERDTreeFind wincmd p endif endfunction 主題設定 這邊選用了從 VScode 搬過來的 Horizon theme，所以 terminal 原生的色彩可能會不夠用，因此會需要將 Vim 設定為 true color，並且使用 iTerm 才能顯示與在 VScode 一樣的顏色。 &quot; Colorscheme set t_Co=256 colorscheme horizon &quot; Set true colors set termguicolors let &amp;t_8f = &quot;\e[38;2;%lu;%lu;%lum&quot; let &amp;t_8b = &quot;\e[48;2;%lu;%lu;%lum&quot; let g:lightline = {&#39;colorscheme&#39; : &#39;horizon&#39;} Auto Command 在存檔前自動刪除空白鍵（Rubocop 會抓😀🔪） 開啟 Vim 後自動開啟 NERDTree &quot; Autocmd: remove space before save au BufWritePre * :%s/\s\+$//e &quot; Autocmd: Open NERDTree while opening vim au VimEnter * NERDTree 基本上這些就是我的 Vim 設定比較特別的地方，前前後後大概花了約一個月的時間上手並且設定完成，在熟悉 Vim 之後真的會覺得介面乾淨很多，不會跳很多要更新外掛、更新 IDE 之類雜七雜八的通知，而且去別的地方編輯到要存檔時真的會習慣要打 :w lol Reference 即將失傳的古老技藝 Vim vgod 的 vimrc vgod’s vim cheatsheet How to Configure Vim like VSCode Coc NERDCommenter CtrlP NERDTree Devicons Git Gutter Airline VScode Horizon Theme" />
+<meta property="og:description" content="2021 年最大的轉變應該就是接觸到了現在的編輯器之神，年初的時候上了資科系蔡銘峰老師開的網路搜索與探勘，第一次看到 Vim 這個編輯器，還有老師跟鬼一樣的操作，讓我默默下定決心要向老師看齊（這堂課又是另一個充實的故事了）；不過自己下去學真的門檻太高，在去年四五月之後就被我暫時擱置在一邊了，直到五月找到實習，七月正式到公司上班之後發現老天，幾乎一半的同事都用 Vim 在開發（包括老闆本人），再加上某個週五的快樂分享會，有位同事分享了他是怎麼從 VScode 轉換到 Vim 上的，我才真正下定決心去把 Vim 學好（畢竟升碩一的暑假也是真的很閒沒錯） Vim 基本操作 所有基本操作我都是看這組教學影片學的，再搭配蔡老師在課堂上介紹 vgod 的 vim 配置和 cheatsheet，如下圖。 基本上如果每天都有在寫程式，每天都逼自己使用 Vim 的話，大概十幾天之後就能夠熟悉基本的操作，接下來就是處理設定檔與外掛的部分。當初我在設定時也是搞得很頭痛，因為最當初什麼都還不懂時就直接使用 vgod 的設定檔，導致操作真的上手之後很多設定其實不是我要的，於是最後我把設定檔全部刪掉，連 Vim 也重新安裝，才真正開始重新設定我的 Vim。 裝外掛囉！ 雖然很像幹話，但在裝外掛的前提是要搞清楚自己想要的功能到底有什麼，不然跟著大家一起亂裝到最後有些功能也許到死都不會用到。像在剛切換到 Vim 之前，我才體會到 VScode 上的 Cmd+P 這個功能有多方便，可以不用從側邊的檔案欄一個一個資料夾慢慢找檔案；像是這樣子的思考方式，可以更快找到想要並且需要的外掛，所以之後我參考了這個影片、並列出了下面幾項我需要的功能，還有對應到我最後找到的外掛： 想要的功能 外掛本人 Tabnine(Auto Complete) Coc 裡的 Tabnine Ctrl / 單行/多行註解 NERDCommenter Ctrl P 尋找檔案 CtrlP File tree viewer NERDTreeDevicons Git status Git Gutter 好看的主題 Airline(優化基本介面)VScode Horizon Theme 而我在 Vim 上使用的外掛管理工具是 Pathogen，因為在安裝時只要把外掛的 github repo clone 到 autoload/ 的資料夾裡就好，不用在 .vimrc 裡新增初始化的設定（當然如果要改外掛初始設定還是得修改）讓我覺得很方便也很好理解。 其他設定 Keymapping 不得不說 Keymapping 真的是很方便的設定，讓我可以完全把在 VScode 上習慣的快速鍵直接搬過來用，這也是一些外掛（像 CtrlP）的運作基礎。舉例來說 nnoremap &lt;Right&gt; &lt;Nop&gt; 的意思是，在 Normal mode 下，&lt;Right&gt; key 要對應成 &lt;Nop&gt; 也就是沒有動作（當初在學基本操作時為了強迫自己記得而設定的），而如果要改在 Visual mode 的 keymapping 的話只需要把 nnoremap 改成 vnoremap 就行了，其中的 nore 代表的則是 no recursive，避免無窮迴圈。 這邊我主要是設定輸入 ( [ &#39; &quot; 就會自動跳出 ) ] &#39; &quot;，還有輸入 { 後如果接的是 &lt;Enter&gt; 就自動補上 }，{{ 自動生成成對的大括號 {} inoremap ( ()&lt;Esc&gt;i inoremap &quot; &quot;&quot;&lt;Esc&gt;i inoremap &#39; &#39;&#39;&lt;Esc&gt;i inoremap [ []&lt;Esc&gt;i inoremap {&lt;CR&gt; {&lt;CR&gt;}&lt;Esc&gt;ko inoremap {{ {}&lt;ESC&gt;i 外掛設定 接下來就是我對外掛設定的 keymapping，這邊真的蠻複雜的，查了一堆資料才把這些設定搞好🥲 NERDTree Ctrl E 開啟 NERDTree 忽略 node_modules/ 在 NERDTree highlight 當前開啟的檔案 nnoremap &lt;C-E&gt; :NERDTreeToggle&lt;CR&gt; let g:NERDTreeIgnore = [&#39;^node_modules$&#39;] autocmd BufRead * call SyncTree() NERDTree + CtrlP Sync 在查外掛設定時看到了一個很酷的功能，就是當 NERDTree 是開啟時執行 CtrlP 尋找檔案，當選取檔案開啟後同步更新 NERDTree 的展開結構，這個行為跟 VScode 裡的 Ctrl P 行為幾乎是一模一樣了！不過因為原作者寫的 IsNERDTreeOpen 有點問題，沒辦法正確判斷 NERDTree 是否開啟，後來上網查了一堆資料才改成下面的結果（註解的部分是原作者的 code），不過因為是很久以前改的，我也沒有留連結，只記得是在 StackExchange 上看到的😢（再不寫紀錄啊） &quot; CtrlP + NERDTree &quot; sync open file with NERDTree &quot; Check if NERDTree is open or active function! IsNERDTreeOpen() return exists(&quot;g:NERDTree&quot;) &amp;&amp; g:NERDTree.IsOpen() &quot;exists(&quot;t:NERDTreeBufName&quot;) &amp;&amp; (bufwinnr(t:NERDTreeBufName) != -1) endfunction &quot; Call NERDTreeFind iff NERDTree is active, current window contains a modifiable &quot; file, and we&#39;re not in vimdiff function! SyncTree() if &amp;modifiable &amp;&amp; IsNERDTreeOpen() &amp;&amp; strlen(expand(&#39;%&#39;)) &gt; 0 &amp;&amp; !&amp;diff NERDTreeFind wincmd p endif endfunction 主題設定 這邊選用了從 VScode 搬過來的 Horizon theme，所以 terminal 原生的色彩可能會不夠用，因此會需要將 Vim 設定為 true color，並且使用 iTerm 才能顯示與在 VScode 一樣的顏色。 &quot; Colorscheme set t_Co=256 colorscheme horizon &quot; Set true colors set termguicolors let &amp;t_8f = &quot;\e[38;2;%lu;%lu;%lum&quot; let &amp;t_8b = &quot;\e[48;2;%lu;%lu;%lum&quot; let g:lightline = {&#39;colorscheme&#39; : &#39;horizon&#39;} Auto Command 在存檔前自動刪除空白鍵（Rubocop 會抓😀🔪） 開啟 Vim 後自動開啟 NERDTree &quot; Autocmd: remove space before save au BufWritePre * :%s/\s\+$//e &quot; Autocmd: Open NERDTree while opening vim au VimEnter * NERDTree 基本上這些就是我的 Vim 設定比較特別的地方，前前後後大概花了約一個月的時間上手並且設定完成，在熟悉 Vim 之後真的會覺得介面乾淨很多，不會跳很多要更新外掛、更新 IDE 之類雜七雜八的通知，而且去別的地方編輯到要存檔時真的會習慣要打 :w lol Reference 即將失傳的古老技藝 Vim vgod 的 vimrc vgod’s vim cheatsheet How to Configure Vim like VSCode Coc NERDCommenter CtrlP NERDTree Devicons Git Gutter Airline VScode Horizon Theme" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/04/vim.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/04/vim.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-04T04:25:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="30 天從 VScode 到 Vim" />
+<script type="application/ld+json">
+{"description":"2021 年最大的轉變應該就是接觸到了現在的編輯器之神，年初的時候上了資科系蔡銘峰老師開的網路搜索與探勘，第一次看到 Vim 這個編輯器，還有老師跟鬼一樣的操作，讓我默默下定決心要向老師看齊（這堂課又是另一個充實的故事了）；不過自己下去學真的門檻太高，在去年四五月之後就被我暫時擱置在一邊了，直到五月找到實習，七月正式到公司上班之後發現老天，幾乎一半的同事都用 Vim 在開發（包括老闆本人），再加上某個週五的快樂分享會，有位同事分享了他是怎麼從 VScode 轉換到 Vim 上的，我才真正下定決心去把 Vim 學好（畢竟升碩一的暑假也是真的很閒沒錯） Vim 基本操作 所有基本操作我都是看這組教學影片學的，再搭配蔡老師在課堂上介紹 vgod 的 vim 配置和 cheatsheet，如下圖。 基本上如果每天都有在寫程式，每天都逼自己使用 Vim 的話，大概十幾天之後就能夠熟悉基本的操作，接下來就是處理設定檔與外掛的部分。當初我在設定時也是搞得很頭痛，因為最當初什麼都還不懂時就直接使用 vgod 的設定檔，導致操作真的上手之後很多設定其實不是我要的，於是最後我把設定檔全部刪掉，連 Vim 也重新安裝，才真正開始重新設定我的 Vim。 裝外掛囉！ 雖然很像幹話，但在裝外掛的前提是要搞清楚自己想要的功能到底有什麼，不然跟著大家一起亂裝到最後有些功能也許到死都不會用到。像在剛切換到 Vim 之前，我才體會到 VScode 上的 Cmd+P 這個功能有多方便，可以不用從側邊的檔案欄一個一個資料夾慢慢找檔案；像是這樣子的思考方式，可以更快找到想要並且需要的外掛，所以之後我參考了這個影片、並列出了下面幾項我需要的功能，還有對應到我最後找到的外掛： 想要的功能 外掛本人 Tabnine(Auto Complete) Coc 裡的 Tabnine Ctrl / 單行/多行註解 NERDCommenter Ctrl P 尋找檔案 CtrlP File tree viewer NERDTreeDevicons Git status Git Gutter 好看的主題 Airline(優化基本介面)VScode Horizon Theme 而我在 Vim 上使用的外掛管理工具是 Pathogen，因為在安裝時只要把外掛的 github repo clone 到 autoload/ 的資料夾裡就好，不用在 .vimrc 裡新增初始化的設定（當然如果要改外掛初始設定還是得修改）讓我覺得很方便也很好理解。 其他設定 Keymapping 不得不說 Keymapping 真的是很方便的設定，讓我可以完全把在 VScode 上習慣的快速鍵直接搬過來用，這也是一些外掛（像 CtrlP）的運作基礎。舉例來說 nnoremap &lt;Right&gt; &lt;Nop&gt; 的意思是，在 Normal mode 下，&lt;Right&gt; key 要對應成 &lt;Nop&gt; 也就是沒有動作（當初在學基本操作時為了強迫自己記得而設定的），而如果要改在 Visual mode 的 keymapping 的話只需要把 nnoremap 改成 vnoremap 就行了，其中的 nore 代表的則是 no recursive，避免無窮迴圈。 這邊我主要是設定輸入 ( [ &#39; &quot; 就會自動跳出 ) ] &#39; &quot;，還有輸入 { 後如果接的是 &lt;Enter&gt; 就自動補上 }，\u001b{\u001b{ 自動生成成對的大括號 {} inoremap ( ()&lt;Esc&gt;i inoremap &quot; &quot;&quot;&lt;Esc&gt;i inoremap &#39; &#39;&#39;&lt;Esc&gt;i inoremap [ []&lt;Esc&gt;i inoremap {&lt;CR&gt; {&lt;CR&gt;}&lt;Esc&gt;ko inoremap \u001b{\u001b{ \u001b{\u001b}&lt;ESC&gt;i 外掛設定 接下來就是我對外掛設定的 keymapping，這邊真的蠻複雜的，查了一堆資料才把這些設定搞好🥲 NERDTree Ctrl E 開啟 NERDTree 忽略 node_modules/ 在 NERDTree highlight 當前開啟的檔案 nnoremap &lt;C-E&gt; :NERDTreeToggle&lt;CR&gt; let g:NERDTreeIgnore = [&#39;^node_modules$&#39;] autocmd BufRead * call SyncTree() NERDTree + CtrlP Sync 在查外掛設定時看到了一個很酷的功能，就是當 NERDTree 是開啟時執行 CtrlP 尋找檔案，當選取檔案開啟後同步更新 NERDTree 的展開結構，這個行為跟 VScode 裡的 Ctrl P 行為幾乎是一模一樣了！不過因為原作者寫的 IsNERDTreeOpen 有點問題，沒辦法正確判斷 NERDTree 是否開啟，後來上網查了一堆資料才改成下面的結果（註解的部分是原作者的 code），不過因為是很久以前改的，我也沒有留連結，只記得是在 StackExchange 上看到的😢（再不寫紀錄啊） &quot; CtrlP + NERDTree &quot; sync open file with NERDTree &quot; Check if NERDTree is open or active function! IsNERDTreeOpen() return exists(&quot;g:NERDTree&quot;) &amp;&amp; g:NERDTree.IsOpen() &quot;exists(&quot;t:NERDTreeBufName&quot;) &amp;&amp; (bufwinnr(t:NERDTreeBufName) != -1) endfunction &quot; Call NERDTreeFind iff NERDTree is active, current window contains a modifiable &quot; file, and we&#39;re not in vimdiff function! SyncTree() if &amp;modifiable &amp;&amp; IsNERDTreeOpen() &amp;&amp; strlen(expand(&#39;%&#39;)) &gt; 0 &amp;&amp; !&amp;diff NERDTreeFind wincmd p endif endfunction 主題設定 這邊選用了從 VScode 搬過來的 Horizon theme，所以 terminal 原生的色彩可能會不夠用，因此會需要將 Vim 設定為 true color，並且使用 iTerm 才能顯示與在 VScode 一樣的顏色。 &quot; Colorscheme set t_Co=256 colorscheme horizon &quot; Set true colors set termguicolors let &amp;t_8f = &quot;\\e[38;2;%lu;%lu;%lum&quot; let &amp;t_8b = &quot;\\e[48;2;%lu;%lu;%lum&quot; let g:lightline = {&#39;colorscheme&#39; : &#39;horizon&#39;} Auto Command 在存檔前自動刪除空白鍵（Rubocop 會抓😀🔪） 開啟 Vim 後自動開啟 NERDTree &quot; Autocmd: remove space before save au BufWritePre * :%s/\\s\\+$//e &quot; Autocmd: Open NERDTree while opening vim au VimEnter * NERDTree 基本上這些就是我的 Vim 設定比較特別的地方，前前後後大概花了約一個月的時間上手並且設定完成，在熟悉 Vim 之後真的會覺得介面乾淨很多，不會跳很多要更新外掛、更新 IDE 之類雜七雜八的通知，而且去別的地方編輯到要存檔時真的會習慣要打 :w lol Reference 即將失傳的古老技藝 Vim vgod 的 vimrc vgod’s vim cheatsheet How to Configure Vim like VSCode Coc NERDCommenter CtrlP NERDTree Devicons Git Gutter Airline VScode Horizon Theme","url":"https://jqlynchien713.github.io/2022/02/04/vim.html","headline":"30 天從 VScode 到 Vim","@type":"BlogPosting","dateModified":"2022-02-04T04:25:00+00:00","datePublished":"2022-02-04T04:25:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/04/vim.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">30 天從 VScode 到 Vim</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-04T04:25:00+00:00" itemprop="datePublished">Feb 4, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 19 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">vim</span>
+    
+      <span class="tag">config</span>
+    
+      <span class="tag">update</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#vim-基本操作">Vim 基本操作</a></li><li><a href="#裝外掛囉">裝外掛囉！</a></li><li><a href="#其他設定">其他設定</a><ul><li><a href="#keymapping">Keymapping</a></li><li><a href="#外掛設定">外掛設定</a><ul><li><a href="#nerdtree">NERDTree</a></li><li><a href="#nerdtree--ctrlp-sync">NERDTree + CtrlP Sync</a></li><li><a href="#主題設定">主題設定</a></li></ul></li><li><a href="#auto-command">Auto Command</a></li></ul></li></ul></div>
+    <p>2021 年最大的轉變應該就是接觸到了現在的編輯器之神，年初的時候上了資科系蔡銘峰老師開的網路搜索與探勘，第一次看到 Vim 這個編輯器，還有老師跟鬼一樣的操作，讓我默默下定決心要向老師看齊（這堂課又是另一個充實的故事了）；不過自己下去學真的門檻太高，在去年四五月之後就被我暫時擱置在一邊了，直到五月找到實習，七月正式到公司上班之後發現老天，幾乎一半的同事都用 Vim 在開發（包括老闆本人），再加上某個週五的快樂分享會，有位同事分享了他是怎麼從 VScode 轉換到 Vim 上的，我才真正下定決心去把 Vim 學好（畢竟升碩一的暑假也是真的很閒沒錯）</p>
+
+<h2 id="vim-基本操作">Vim 基本操作</h2>
+<p>所有基本操作我都是看<a href="https://www.youtube.com/watch?v=LQVriYE3kxk&amp;list=PLBd8JGCAcUAH56L2CYF7SmWJYKwHQYUDI">這組</a>教學影片學的，再搭配蔡老師在課堂上介紹 vgod 的 <a href="https://github.com/vgod/vimrc">vim 配置</a>和 <a href="https://blog.vgod.tw/2009/12/08/vim-cheat-sheet-for-programmers/">cheatsheet</a>，如下圖。</p>
+
+<p><img src="/assets/img/vim-cheat-sheet-full.png" alt="" /></p>
+
+<p>基本上如果每天都有在寫程式，每天都逼自己使用 Vim 的話，大概十幾天之後就能夠熟悉基本的操作，接下來就是處理設定檔與外掛的部分。當初我在設定時也是搞得很頭痛，因為最當初什麼都還不懂時就直接使用 vgod 的設定檔，導致操作真的上手之後很多設定其實不是我要的，於是最後我把設定檔全部刪掉，連 Vim 也重新安裝，才真正開始重新設定我的 Vim。</p>
+
+<h2 id="裝外掛囉">裝外掛囉！</h2>
+<p>雖然很像幹話，但在裝外掛的前提是要<strong>搞清楚自己想要的功能到底有什麼</strong>，不然跟著大家一起亂裝到最後有些功能也許到死都不會用到。像在剛切換到 Vim 之前，我才體會到 VScode 上的 <code class="language-plaintext highlighter-rouge">Cmd+P</code> 這個功能有多方便，可以不用從側邊的檔案欄一個一個資料夾慢慢找檔案；像是這樣子的思考方式，可以更快找到想要並且需要的外掛，所以之後我參考了<a href="https://www.youtube.com/watch?v=gnupOrSEikQ">這個影片</a>、並列出了下面幾項我需要的功能，還有對應到我最後找到的外掛：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>想要的功能</th>
+      <th>外掛本人</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Tabnine(Auto Complete)</td>
+      <td><a href="https://github.com/neoclide/coc.nvim.git">Coc</a> 裡的 Tabnine</td>
+    </tr>
+    <tr>
+      <td>Ctrl / 單行/多行註解</td>
+      <td><a href="https://github.com/preservim/nerdcommenter.git">NERDCommenter</a></td>
+    </tr>
+    <tr>
+      <td>Ctrl P 尋找檔案</td>
+      <td><a href="https://github.com/ctrlpvim/ctrlp.vim.git">CtrlP</a></td>
+    </tr>
+    <tr>
+      <td>File tree viewer</td>
+      <td><a href="https://github.com/preservim/nerdtree.git">NERDTree</a><br /><a href="https://github.com/ryanoasis/vim-devicons.git">Devicons</a></td>
+    </tr>
+    <tr>
+      <td>Git status</td>
+      <td><a href="https://github.com/airblade/vim-gitgutter.git">Git Gutter</a></td>
+    </tr>
+    <tr>
+      <td>好看的主題</td>
+      <td><a href="https://github.com/vim-airline/vim-airline.git">Airline</a>(優化基本介面)<br /><a href="https://github.com/ntk148v/vim-horizon.git">VScode Horizon Theme</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>而我在 Vim 上使用的外掛管理工具是 Pathogen，因為在安裝時只要把外掛的 github repo clone 到 <code class="language-plaintext highlighter-rouge">autoload/</code> 的資料夾裡就好，不用在 <code class="language-plaintext highlighter-rouge">.vimrc</code> 裡新增初始化的設定（當然如果要改外掛初始設定還是得修改）讓我覺得很方便也很好理解。</p>
+
+<h2 id="其他設定">其他設定</h2>
+<h3 id="keymapping">Keymapping</h3>
+
+<p>不得不說 Keymapping 真的是很方便的設定，讓我可以完全把在 VScode 上習慣的快速鍵直接搬過來用，這也是一些外掛（像 <code class="language-plaintext highlighter-rouge">CtrlP</code>）的運作基礎。舉例來說 <code class="language-plaintext highlighter-rouge">nnoremap &lt;Right&gt; &lt;Nop&gt;</code> 的意思是，在 Normal mode 下，<code class="language-plaintext highlighter-rouge">&lt;Right&gt;</code> key 要對應成 <code class="language-plaintext highlighter-rouge">&lt;Nop&gt;</code> 也就是沒有動作（當初在學基本操作時為了強迫自己記得而設定的），而如果要改在 Visual mode 的 keymapping 的話只需要把 <code class="language-plaintext highlighter-rouge">nnoremap</code> 改成 <code class="language-plaintext highlighter-rouge">vnoremap</code> 就行了，其中的 <code class="language-plaintext highlighter-rouge">nore</code> 代表的則是 no recursive，避免無窮迴圈。</p>
+
+<p>這邊我主要是設定輸入 <code class="language-plaintext highlighter-rouge">(</code> <code class="language-plaintext highlighter-rouge">[</code> <code class="language-plaintext highlighter-rouge">'</code> <code class="language-plaintext highlighter-rouge">"</code> 就會自動跳出 <code class="language-plaintext highlighter-rouge">)</code> <code class="language-plaintext highlighter-rouge">]</code> <code class="language-plaintext highlighter-rouge">'</code> <code class="language-plaintext highlighter-rouge">"</code>，還有輸入 <code class="language-plaintext highlighter-rouge">{</code> 後如果接的是 <code class="language-plaintext highlighter-rouge">&lt;Enter&gt;</code> 就自動補上 <code class="language-plaintext highlighter-rouge">}</code>，<code class="language-plaintext highlighter-rouge">{{</code> 自動生成成對的大括號 <code class="language-plaintext highlighter-rouge">{}</code></p>
+
+<div class="language-vim highlighter-rouge"><div class="highlight"><pre class="highlight"><code>inoremap <span class="p">(</span> <span class="p">()&lt;</span>Esc<span class="p">&gt;</span><span class="k">i</span>
+inoremap <span class="s2">" "</span>"<span class="p">&lt;</span>Esc<span class="p">&gt;</span><span class="k">i</span>
+inoremap <span class="s1">' '</span>'<span class="p">&lt;</span>Esc<span class="p">&gt;</span><span class="k">i</span>
+inoremap <span class="p">[</span> <span class="p">[]&lt;</span>Esc<span class="p">&gt;</span><span class="k">i</span>
+
+inoremap <span class="p">{&lt;</span>CR<span class="p">&gt;</span> <span class="p">{&lt;</span>CR<span class="p">&gt;}&lt;</span>Esc<span class="p">&gt;</span>ko
+inoremap <span class="p">{</span><span class="p">{</span> <span class="p">{</span><span class="p">}&lt;</span>ESC<span class="p">&gt;</span><span class="k">i</span>
+</code></pre></div></div>
+
+<h3 id="外掛設定">外掛設定</h3>
+<p>接下來就是我對外掛設定的 keymapping，這邊真的蠻複雜的，查了一堆資料才把這些設定搞好🥲</p>
+
+<h4 id="nerdtree">NERDTree</h4>
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">Ctrl E</code> 開啟 NERDTree</li>
+  <li>忽略 <code class="language-plaintext highlighter-rouge">node_modules/</code></li>
+  <li>在 NERDTree highlight 當前開啟的檔案</li>
+</ol>
+
+<div class="language-vim highlighter-rouge"><div class="highlight"><pre class="highlight"><code>nnoremap <span class="p">&lt;</span>C<span class="p">-</span>E<span class="p">&gt;</span> <span class="p">:</span>NERDTreeToggle<span class="p">&lt;</span>CR<span class="p">&gt;</span>
+<span class="k">let</span> <span class="nv">g:NERDTreeIgnore</span> <span class="p">=</span> <span class="p">[</span><span class="s1">'^node_modules$'</span><span class="p">]</span>
+autocmd <span class="nb">BufRead</span> * <span class="k">call</span> SyncTree<span class="p">()</span>
+</code></pre></div></div>
+
+<h4 id="nerdtree--ctrlp-sync">NERDTree + CtrlP Sync</h4>
+<p>在查外掛設定時看到了一個很酷的功能，就是當 NERDTree 是開啟時執行 CtrlP 尋找檔案，當選取檔案開啟後同步更新 NERDTree 的展開結構，這個行為跟 VScode 裡的 Ctrl P 行為幾乎是一模一樣了！不過因為原作者寫的 <code class="language-plaintext highlighter-rouge">IsNERDTreeOpen</code> 有點問題，沒辦法正確判斷 NERDTree 是否開啟，後來上網查了一堆資料才改成下面的結果（註解的部分是原作者的 code），不過因為是很久以前改的，我也沒有留連結，只記得是在 StackExchange 上看到的😢（再不寫紀錄啊）</p>
+
+<div class="language-vim highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">" CtrlP + NERDTree</span>
+<span class="c">" sync open file with NERDTree</span>
+<span class="c">" Check if NERDTree is open or active</span>
+<span class="k">function</span><span class="p">!</span> IsNERDTreeOpen<span class="p">()</span>
+  <span class="k">return</span> <span class="nb">exists</span><span class="p">(</span><span class="s2">"g:NERDTree"</span><span class="p">)</span> &amp;&amp; <span class="nv">g:NERDTree</span><span class="p">.</span>IsOpen<span class="p">()</span>
+  <span class="c">"exists("t:NERDTreeBufName") &amp;&amp; (bufwinnr(t:NERDTreeBufName) != -1)</span>
+<span class="k">endfunction</span>
+
+<span class="c">" Call NERDTreeFind iff NERDTree is active, current window contains a modifiable</span>
+<span class="c">" file, and we're not in vimdiff</span>
+<span class="k">function</span><span class="p">!</span> SyncTree<span class="p">()</span>
+  <span class="k">if</span> &amp;<span class="nb">modifiable</span> &amp;&amp; IsNERDTreeOpen<span class="p">()</span> &amp;&amp; <span class="nb">strlen</span><span class="p">(</span><span class="nb">expand</span><span class="p">(</span><span class="s1">'%'</span><span class="p">))</span> <span class="p">&gt;</span> <span class="m">0</span> &amp;&amp; <span class="p">!</span>&amp;<span class="nb">diff</span>
+    NERDTreeFind
+    <span class="k">wincmd</span> <span class="k">p</span>
+  <span class="k">endif</span>
+<span class="k">endfunction</span>
+</code></pre></div></div>
+
+<h4 id="主題設定">主題設定</h4>
+<p>這邊選用了從 VScode 搬過來的 Horizon theme，所以 terminal 原生的色彩可能會不夠用，因此會需要將 Vim 設定為 true color，並且使用 iTerm 才能顯示與在 VScode 一樣的顏色。</p>
+
+<div class="language-vim highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">" Colorscheme</span>
+<span class="k">set</span> <span class="nb">t_Co</span><span class="p">=</span><span class="m">256</span>
+<span class="k">colorscheme</span> horizon
+<span class="c">" Set true colors</span>
+<span class="k">set</span> <span class="nb">termguicolors</span>
+<span class="k">let</span> &amp;<span class="nb">t_8f</span> <span class="p">=</span> <span class="s2">"\e[38;2;%lu;%lu;%lum"</span>
+<span class="k">let</span> &amp;<span class="nb">t_8b</span> <span class="p">=</span> <span class="s2">"\e[48;2;%lu;%lu;%lum"</span>
+<span class="k">let</span> <span class="nv">g:lightline</span> <span class="p">=</span> <span class="p">{</span><span class="s1">'colorscheme'</span> <span class="p">:</span> <span class="s1">'horizon'</span><span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="auto-command">Auto Command</h3>
+<ol>
+  <li>在存檔前自動刪除空白鍵（Rubocop 會抓😀🔪）</li>
+  <li>開啟 Vim 後自動開啟 NERDTree</li>
+</ol>
+
+<div class="language-vim highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">" Autocmd: remove space before save</span>
+<span class="k">au</span> <span class="nb">BufWritePre</span> * <span class="p">:</span>%s<span class="sr">/\s\+$/</span>/<span class="k">e</span>
+<span class="c">" Autocmd: Open NERDTree while opening vim</span>
+<span class="k">au</span> <span class="nb">VimEnter</span> * NERDTree
+</code></pre></div></div>
+
+<p>基本上這些就是我的 Vim 設定比較特別的地方，前前後後大概花了約一個月的時間上手並且設定完成，在熟悉 Vim 之後真的會覺得介面乾淨很多，不會跳很多要更新外掛、更新 IDE 之類雜七雜八的通知，而且去別的地方編輯到要存檔時真的會習慣要打 <code class="language-plaintext highlighter-rouge">:w</code> lol</p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://www.youtube.com/watch?v=LQVriYE3kxk&amp;list=PLBd8JGCAcUAH56L2CYF7SmWJYKwHQYUDI">即將失傳的古老技藝 Vim</a></li>
+  <li><a href="https://github.com/vgod/vimrc">vgod 的 vimrc</a></li>
+  <li><a href="https://blog.vgod.tw/2009/12/08/vim-cheat-sheet-for-programmers/">vgod’s vim cheatsheet</a></li>
+  <li><a href="https://www.youtube.com/watch?v=gnupOrSEikQ">How to Configure Vim like VSCode</a></li>
+  <li><a href="https://github.com/neoclide/coc.nvim.git">Coc</a></li>
+  <li><a href="https://github.com/preservim/nerdcommenter.git">NERDCommenter</a></li>
+  <li><a href="https://github.com/ctrlpvim/ctrlp.vim.git">CtrlP</a></li>
+  <li><a href="https://github.com/preservim/nerdtree.git">NERDTree</a></li>
+  <li><a href="https://github.com/ryanoasis/vim-devicons.git">Devicons</a></li>
+  <li><a href="https://github.com/airblade/vim-gitgutter.git">Git Gutter</a></li>
+  <li><a href="https://github.com/vim-airline/vim-airline.git">Airline</a></li>
+  <li><a href="https://github.com/ntk148v/vim-horizon.git">VScode Horizon Theme</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/04/vim.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

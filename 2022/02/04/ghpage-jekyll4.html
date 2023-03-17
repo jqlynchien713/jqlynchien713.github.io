@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>在 Github Pages 上使用 Jekyll 4 | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="在 Github Pages 上使用 Jekyll 4" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="真的是要累鼠…，才剛寫完一篇 Vim 想說加點酷酷ㄉ功能，結果馬上給我跑一堆問題出來：）） 奇怪的小問題：CJK word count 簡單來說就是想在這個部落格加上跟 Medium 一樣的 Reading time helper（上面 👀 n mins 的部分），雖然有查到最簡單的算法就是總字數除以每分鐘的閱讀字數，但就遇到英文跟中文的字數算法不一樣的問題，因為英文的字數算法是空格隔開，但中文的算法是以一個 character 為一個字。不過在本地端開發的時候有查到 Jekyll 4.0 之後的 number_of_words 有支援 cjk（中文、日文、韓文）的字數計算，於是快樂的使用 {{ &quot;你好hello世界world&quot; | number_of_words: &quot;auto&quot; }} 的語法，誰知道推上 Github 之後發現哇，Github Pages 只支援到 Jekyll 3.9 😀🔪，於是這篇文就誕生了 😀🔪🔪🔪🔪 使用 Github Action 來部署 Jekyll site 基本上我是照著官方的文件做的，其實文件上說的都很清楚詳細。簡單來說就是在現有的 Jekyll 專案裡新增一個 .github/workflow/&lt;your-action&gt;.yml 的檔案，目的是要在 Github 的 repo 上新增 Action，最基本的設定如下： name: Build and deploy Jekyll site to GitHub Pages on: push: branches: - main # or master before October 2020 jobs: github-pages: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: actions/cache@v2 with: path: vendor/bundle key: ${{ runner.os }}-gems-${{ hashFiles(&#39;**/Gemfile&#39;) }} restore-keys: | ${{ runner.os }}-gems- - uses: helaili/jekyll-action@v2 with: token: ${{ secrets.GITHUB_TOKEN }} 這些動作的設定基本上跟在寫 docker-compose 還有 gitlab-ci 是一樣的（畢竟是一樣的東西），官網上也都有說明每一行在幹嘛，這邊就不贅述了，比較重要的地方是最後一個 step 使用了 Jekyll 專用的 action helaili/jekyll-action@v2 。 在新增完這個檔案後，只要推上 Github 之後基本上就沒問題了，推完以後可以去 repo 的 Action tab 檢查這個剛設定的 action 有沒有確實跑起來並且成功跑完。基本上跑完就不會有錯了，不過我也是在這裡遇到了第三個大坑（這個坑最白癡）。 修改 Source Branch 官方文件上說，這個 action 執行完之後會把所有 build 出來的內容放到 gh-pages 的分支裡面，也不需要自己新增 gh-pages 的分支，並且在 Action tab 裡我自己新增的那個 action 是成功執行完畢的，不過我怎麼看 github 的介面都顯示 your site is ready to be published(aka 你的 action 掛了)、還有這個網站都沒有更新過後該要有的樣子。 最後我仔細去檢查 jekyll action 執行時的訊息，才發現原來這個 action 是把 build 好的東西丟到 master branch 上，而不是 gh-pages branch 😀🔪🔪🔪 最後的最後，去到 Github repo &gt; Settings &gt; Pages &gt; Source Branch，改成剛剛在 jekyll action log 上看到的分支，就能看到 build 好ㄉ、4.2.0 版的 Jekyll site 了，是不是其實真的很簡單呢😀🔪🔪🔪 Reference Jekyll Read Time without Plugins Github Action(Jekyll Docs)" />
+<meta property="og:description" content="真的是要累鼠…，才剛寫完一篇 Vim 想說加點酷酷ㄉ功能，結果馬上給我跑一堆問題出來：）） 奇怪的小問題：CJK word count 簡單來說就是想在這個部落格加上跟 Medium 一樣的 Reading time helper（上面 👀 n mins 的部分），雖然有查到最簡單的算法就是總字數除以每分鐘的閱讀字數，但就遇到英文跟中文的字數算法不一樣的問題，因為英文的字數算法是空格隔開，但中文的算法是以一個 character 為一個字。不過在本地端開發的時候有查到 Jekyll 4.0 之後的 number_of_words 有支援 cjk（中文、日文、韓文）的字數計算，於是快樂的使用 {{ &quot;你好hello世界world&quot; | number_of_words: &quot;auto&quot; }} 的語法，誰知道推上 Github 之後發現哇，Github Pages 只支援到 Jekyll 3.9 😀🔪，於是這篇文就誕生了 😀🔪🔪🔪🔪 使用 Github Action 來部署 Jekyll site 基本上我是照著官方的文件做的，其實文件上說的都很清楚詳細。簡單來說就是在現有的 Jekyll 專案裡新增一個 .github/workflow/&lt;your-action&gt;.yml 的檔案，目的是要在 Github 的 repo 上新增 Action，最基本的設定如下： name: Build and deploy Jekyll site to GitHub Pages on: push: branches: - main # or master before October 2020 jobs: github-pages: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: actions/cache@v2 with: path: vendor/bundle key: ${{ runner.os }}-gems-${{ hashFiles(&#39;**/Gemfile&#39;) }} restore-keys: | ${{ runner.os }}-gems- - uses: helaili/jekyll-action@v2 with: token: ${{ secrets.GITHUB_TOKEN }} 這些動作的設定基本上跟在寫 docker-compose 還有 gitlab-ci 是一樣的（畢竟是一樣的東西），官網上也都有說明每一行在幹嘛，這邊就不贅述了，比較重要的地方是最後一個 step 使用了 Jekyll 專用的 action helaili/jekyll-action@v2 。 在新增完這個檔案後，只要推上 Github 之後基本上就沒問題了，推完以後可以去 repo 的 Action tab 檢查這個剛設定的 action 有沒有確實跑起來並且成功跑完。基本上跑完就不會有錯了，不過我也是在這裡遇到了第三個大坑（這個坑最白癡）。 修改 Source Branch 官方文件上說，這個 action 執行完之後會把所有 build 出來的內容放到 gh-pages 的分支裡面，也不需要自己新增 gh-pages 的分支，並且在 Action tab 裡我自己新增的那個 action 是成功執行完畢的，不過我怎麼看 github 的介面都顯示 your site is ready to be published(aka 你的 action 掛了)、還有這個網站都沒有更新過後該要有的樣子。 最後我仔細去檢查 jekyll action 執行時的訊息，才發現原來這個 action 是把 build 好的東西丟到 master branch 上，而不是 gh-pages branch 😀🔪🔪🔪 最後的最後，去到 Github repo &gt; Settings &gt; Pages &gt; Source Branch，改成剛剛在 jekyll action log 上看到的分支，就能看到 build 好ㄉ、4.2.0 版的 Jekyll site 了，是不是其實真的很簡單呢😀🔪🔪🔪 Reference Jekyll Read Time without Plugins Github Action(Jekyll Docs)" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/04/ghpage-jekyll4.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/04/ghpage-jekyll4.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-04T11:46:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="在 Github Pages 上使用 Jekyll 4" />
+<script type="application/ld+json">
+{"description":"真的是要累鼠…，才剛寫完一篇 Vim 想說加點酷酷ㄉ功能，結果馬上給我跑一堆問題出來：）） 奇怪的小問題：CJK word count 簡單來說就是想在這個部落格加上跟 Medium 一樣的 Reading time helper（上面 👀 n mins 的部分），雖然有查到最簡單的算法就是總字數除以每分鐘的閱讀字數，但就遇到英文跟中文的字數算法不一樣的問題，因為英文的字數算法是空格隔開，但中文的算法是以一個 character 為一個字。不過在本地端開發的時候有查到 Jekyll 4.0 之後的 number_of_words 有支援 cjk（中文、日文、韓文）的字數計算，於是快樂的使用 \u001b{\u001b{ &quot;你好hello世界world&quot; | number_of_words: &quot;auto&quot; \u001b}\u001b} 的語法，誰知道推上 Github 之後發現哇，Github Pages 只支援到 Jekyll 3.9 😀🔪，於是這篇文就誕生了 😀🔪🔪🔪🔪 使用 Github Action 來部署 Jekyll site 基本上我是照著官方的文件做的，其實文件上說的都很清楚詳細。簡單來說就是在現有的 Jekyll 專案裡新增一個 .github/workflow/&lt;your-action&gt;.yml 的檔案，目的是要在 Github 的 repo 上新增 Action，最基本的設定如下： name: Build and deploy Jekyll site to GitHub Pages on: push: branches: - main # or master before October 2020 jobs: github-pages: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: actions/cache@v2 with: path: vendor/bundle key: $\u001b{\u001b{ runner.os \u001b}\u001b}-gems-$\u001b{\u001b{ hashFiles(&#39;**/Gemfile&#39;) \u001b}\u001b} restore-keys: | $\u001b{\u001b{ runner.os \u001b}\u001b}-gems- - uses: helaili/jekyll-action@v2 with: token: $\u001b{\u001b{ secrets.GITHUB_TOKEN \u001b}\u001b} 這些動作的設定基本上跟在寫 docker-compose 還有 gitlab-ci 是一樣的（畢竟是一樣的東西），官網上也都有說明每一行在幹嘛，這邊就不贅述了，比較重要的地方是最後一個 step 使用了 Jekyll 專用的 action helaili/jekyll-action@v2 。 在新增完這個檔案後，只要推上 Github 之後基本上就沒問題了，推完以後可以去 repo 的 Action tab 檢查這個剛設定的 action 有沒有確實跑起來並且成功跑完。基本上跑完就不會有錯了，不過我也是在這裡遇到了第三個大坑（這個坑最白癡）。 修改 Source Branch 官方文件上說，這個 action 執行完之後會把所有 build 出來的內容放到 gh-pages 的分支裡面，也不需要自己新增 gh-pages 的分支，並且在 Action tab 裡我自己新增的那個 action 是成功執行完畢的，不過我怎麼看 github 的介面都顯示 your site is ready to be published(aka 你的 action 掛了)、還有這個網站都沒有更新過後該要有的樣子。 最後我仔細去檢查 jekyll action 執行時的訊息，才發現原來這個 action 是把 build 好的東西丟到 master branch 上，而不是 gh-pages branch 😀🔪🔪🔪 最後的最後，去到 Github repo &gt; Settings &gt; Pages &gt; Source Branch，改成剛剛在 jekyll action log 上看到的分支，就能看到 build 好ㄉ、4.2.0 版的 Jekyll site 了，是不是其實真的很簡單呢😀🔪🔪🔪 Reference Jekyll Read Time without Plugins Github Action(Jekyll Docs)","url":"https://jqlynchien713.github.io/2022/02/04/ghpage-jekyll4.html","headline":"在 Github Pages 上使用 Jekyll 4","@type":"BlogPosting","dateModified":"2022-02-04T11:46:00+00:00","datePublished":"2022-02-04T11:46:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/04/ghpage-jekyll4.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">在 Github Pages 上使用 Jekyll 4</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-04T11:46:00+00:00" itemprop="datePublished">Feb 4, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 9 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">jekyll</span>
+    
+      <span class="tag">deploy</span>
+    
+      <span class="tag">update</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#奇怪的小問題cjk-word-count">奇怪的小問題：CJK word count</a></li><li><a href="#使用-github-action-來部署-jekyll-site">使用 Github Action 來部署 Jekyll site</a><ul><li><a href="#修改-source-branch">修改 Source Branch</a></li></ul></li></ul></div>
+    <p>真的是要累鼠…，才剛寫完一篇 Vim 想說加點酷酷ㄉ功能，結果馬上給我跑一堆問題出來：））</p>
+
+<h3 id="奇怪的小問題cjk-word-count">奇怪的小問題：CJK word count</h3>
+<p>簡單來說就是想在這個部落格加上跟 Medium 一樣的 Reading time helper（上面 👀 n mins 的部分），雖然有查到最簡單的算法就是總字數除以每分鐘的閱讀字數，但就遇到英文跟中文的字數算法不一樣的問題，因為英文的字數算法是空格隔開，但中文的算法是以一個 character 為一個字。不過在本地端開發的時候有查到 Jekyll 4.0 之後的 <code class="language-plaintext highlighter-rouge">number_of_words</code> 有支援 <code class="language-plaintext highlighter-rouge">cjk</code>（中文、日文、韓文）的字數計算，於是快樂的使用 <code class="language-plaintext highlighter-rouge">{{ "你好hello世界world" | number_of_words: "auto" }}</code> 的語法，誰知道推上 Github 之後發現哇，Github Pages 只支援到 Jekyll 3.9 😀🔪，於是這篇文就誕生了 😀🔪🔪🔪🔪</p>
+
+<h3 id="使用-github-action-來部署-jekyll-site">使用 Github Action 來部署 Jekyll site</h3>
+<p>基本上我是照著<a href="https://jekyllrb.com/docs/continuous-integration/github-actions/">官方的文件</a>做的，其實文件上說的都很清楚詳細。簡單來說就是在現有的 Jekyll 專案裡新增一個 <code class="language-plaintext highlighter-rouge">.github/workflow/&lt;your-action&gt;.yml</code> 的檔案，目的是要在 Github 的 repo 上新增 Action，最基本的設定如下：</p>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">name</span><span class="pi">:</span> <span class="s">Build and deploy Jekyll site to GitHub Pages</span>
+
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">branches</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">main</span> <span class="c1"># or master before October 2020</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">github-pages</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v2</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/cache@v2</span>
+      <span class="na">with</span><span class="pi">:</span>
+        <span class="na">path</span><span class="pi">:</span> <span class="s">vendor/bundle</span>
+        <span class="na">key</span><span class="pi">:</span> <span class="s">${{ runner.os }}-gems-${{ hashFiles('**/Gemfile') }}</span>
+        <span class="na">restore-keys</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">${{ runner.os }}-gems-</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">helaili/jekyll-action@v2</span>
+        <span class="na">with</span><span class="pi">:</span>
+          <span class="na">token</span><span class="pi">:</span> <span class="s">${{ secrets.GITHUB_TOKEN }}</span>
+</code></pre></div></div>
+
+<p>這些動作的設定基本上跟在寫 docker-compose 還有 gitlab-ci 是一樣的（畢竟是一樣的東西），官網上也都有說明每一行在幹嘛，這邊就不贅述了，比較重要的地方是最後一個 step 使用了 Jekyll 專用的 action <code class="language-plaintext highlighter-rouge">helaili/jekyll-action@v2</code> 。</p>
+
+<p>在新增完這個檔案後，只要推上 Github 之後基本上就沒問題了，推完以後可以去 repo 的 Action tab 檢查這個剛設定的 action 有沒有確實跑起來並且成功跑完。基本上跑完就不會有錯了，不過我也是在這裡遇到了第三個大坑（這個坑最白癡）。</p>
+
+<h4 id="修改-source-branch">修改 Source Branch</h4>
+<p>官方文件上說，這個 action 執行完之後會把所有 build 出來的內容放到 <code class="language-plaintext highlighter-rouge">gh-pages</code> 的分支裡面，也不需要自己新增 <code class="language-plaintext highlighter-rouge">gh-pages</code> 的分支，並且在 Action tab 裡我自己新增的那個 action 是成功執行完畢的，不過我怎麼看 github 的介面都顯示 your site is ready to be published(aka 你的 action 掛了)、還有這個網站都沒有更新過後該要有的樣子。</p>
+
+<p>最後我仔細去檢查 jekyll action 執行時的訊息，才發現原來這個 action 是把 build 好的東西丟到 master branch 上，而不是 gh-pages branch 😀🔪🔪🔪</p>
+
+<p><img src="/assets/img/action-log.png" alt="" /></p>
+
+<p>最後的最後，去到 Github repo &gt; Settings &gt; Pages &gt; Source Branch，改成剛剛在 jekyll action log 上看到的分支，就能看到 build 好ㄉ、4.2.0 版的 Jekyll site 了，是不是其實真的很簡單呢😀🔪🔪🔪</p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://int3ractive.com/blog/2018/jekyll-read-time-without-plugins/">Jekyll Read Time without Plugins</a></li>
+  <li><a href="https://jekyllrb.com/docs/continuous-integration/github-actions/">Github Action(Jekyll Docs)</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/04/ghpage-jekyll4.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

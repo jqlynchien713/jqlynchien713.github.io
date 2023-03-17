@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Kubernetes 實作紀錄（上）- Web Application Settings | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="Kubernetes 實作紀錄（上）- Web Application Settings" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="今天決定來寫上學期必修課的期末報告！雖然說這堂課過得非常莫名其妙，期末專案也只有一（？）個條件，不過在建完整個專案之後還是學到蠻多東西的。至於老師提出的唯一一個條件則是要我們理解微服務到底在幹嘛，並且一定要用到 Kubernetes；在與組員討論過後，我們決定做個最簡單的論壇網站（可以註冊、登入、發文、留言），前端使用 React.js，後端使用 Django 作為 API server，用 Docker 把這兩個服務打包後，再來煩惱要怎麼用 K8s 或 Docker-compose 對這些服務做管理。 本專案的前端由 React.js (v17) 建置，部分元件因為與之前寫的專案通用，所以用的是原始的 class based，另一部分因為被畢業專題組員推坑，使用的是 functional component 的寫法。 Basic Settings - Routing 在整個前端開發的過程中，我遇到比較麻煩的地方有 Routing 的設置。因為這次專案並沒有很大，所以我把 routing 的規則直接寫在 App.js 裡，使用的是 react-router-dom 的套件。基本上會用到 BrowserRouter、Routes、Route 三個物件，BrowserRouter 用於處理動態內容的路徑宣告（靜態則使用 HashRouter），Routes 則為 v5 的 Switch 在 v6 的對應，也就是控制 url 與 path 的 mapping，最後 Route 的部分就是單純的路徑宣告，與該路徑對應到的元件。 import { BrowserRouter, Route, Routes } from &quot;react-router-dom&quot;; function App() { return ( &lt;&gt; &lt;Nav/&gt; &lt;div className=&#39;container py-5&#39;&gt; &lt;BrowserRouter&gt; &lt;Routes&gt; &lt;Route index element={&lt;PostContainer/&gt;}/&gt; &lt;Route path=&quot;post/:postId&quot; element={&lt;Post /&gt;}/&gt; &lt;Route path=&quot;profile&quot; element={&lt;Profile /&gt;}/&gt; &lt;Route path=&quot;login&quot; element={&lt;Login /&gt;}/&gt; &lt;Route path=&quot;signup&quot; element={&lt;Signup /&gt;}/&gt; &lt;/Routes&gt; &lt;/BrowserRouter&gt; &lt;/div&gt; &lt;/&gt; ); } Dockerfile 至於容器化的部分就真的很簡單，只需要使用正確版本的 node base image（我們用的是 node:14-alpine），接下來只要確認所有東西都有複製到容器裡，然後安裝所有套件，就可以把前端的 server 開起來了。 FROM node:14-alpine WORKDIR /forum COPY package.json . RUN yarn install COPY . . RUN npm run build EXPOSE 3000 CMD [&quot;yarn&quot;, &quot;start&quot;] 這邊沒使用 Volume 是因為還沒學到…😀🔪 後端因為是全部交給另一個組員處理，所以我能紀錄的東西也不多 QQ Docker-compose 檔案結構 在我們建置完前後端的容器後，直接在兩個專案的外面再新增一個 docker-compose 的 yaml 檔。不過因為需要 nginx 來反向代理 React 的 Node.js web server，所以需要新增一支 nginx-setup.conf 的設定檔；而後端採用 uWSGI 作為 WSGI 伺服器，因此才會有 uwsgi.ini 這個檔案。 ▾ forum/ # front-end ▸ public/ ▸ src/ Dockerfile package.json yarn-error.log yarn.lock ▾ forumserver/ # back-end ▸ forum/ Dockerfile requirements.txt start_server.sh uwsgi.ini ▾ nginx/ nginx-setup.conf docker-compose.yml WSGI &amp; Nginx 在第一次接觸到 Python web app 時，就有聽說過 WSGI 這個東西，至於 Nginx 則是連實習也都會用到的工具，在這邊先簡單介紹一下這兩個工具的用途： WSGI: Python Web Server GateWay Interface，Python 對於 Web Server 與 Web Application 之間溝通的規範。 Nginx: 可以提高 Web server 效能，對於靜態檔案有 Cache 的機制，降低 response 的等待時間，同時有均衡附載的特性，也可以作為反向代理伺服器 在採用了上述兩個工具後，專案的 request 傳遞架構會跟下圖一樣： 因為 Nginx server 無法實現 WSGI 規範，因此我們採用了 uWSGI，是一種實現了 WSGI 等規範的 server（另外一種也很常見的 WSGI server 為 Gunicorn），用於接收前端（代理）伺服器轉發的動態請求，轉發給 Web application(Django)，並接收回傳的結果、轉發給代理伺服器(Nginx)。 為了能順利使用 Nginx 與 uWSGI server 做溝通，我們需要加上 Nginx 的設定檔，基本上就是設定要聽哪個 port 來的 request，還有 API server 的位置，並且設定靜態檔案的路徑。其中 try_files 那行的意義是，當遇到無法解析的路徑時，全部都導向 index.html，這麼做就會達到讀取 React app 的效果。 upstream api { server backend:8000; } server { listen 8080; location / { root /var/www/forum; try_files $uri $uri/ /index.html =404; } location /api/ { proxy_pass http://api; proxy_set_header Host $http_host; } } docker-compose.yml 最後因為我們加上了 Nginx，因此會需要在 docker-compose.yml 裡新增一項 Nginx 的服務；所以最後總共會有前後端與 Nginx 三個服務，設置如下： version: &#39;3&#39; services: backend: build: context: ./forumserver command: /bin/sh /opt/uwsgi/start_server.sh ports: - &quot;8000:8000&quot; frontend: build: context: ./forum volumes: - react_build:/forum/build command: yarn start nginx: image: nginx:latest ports: - 80:8080 volumes: - ./nginx/nginx-setup.conf:/etc/nginx/conf.d/default.conf:ro - react_build:/var/www/forum depends_on: - backend - frontend volumes: react_build: Reference Flask 為甚麼需要 WSGI 與 Nginx Docker | Towards serving React (Nginx) with Django API (gunicorn) [Docker 教學] 如何將前端網站打包成 Docker Image" />
+<meta property="og:description" content="今天決定來寫上學期必修課的期末報告！雖然說這堂課過得非常莫名其妙，期末專案也只有一（？）個條件，不過在建完整個專案之後還是學到蠻多東西的。至於老師提出的唯一一個條件則是要我們理解微服務到底在幹嘛，並且一定要用到 Kubernetes；在與組員討論過後，我們決定做個最簡單的論壇網站（可以註冊、登入、發文、留言），前端使用 React.js，後端使用 Django 作為 API server，用 Docker 把這兩個服務打包後，再來煩惱要怎麼用 K8s 或 Docker-compose 對這些服務做管理。 本專案的前端由 React.js (v17) 建置，部分元件因為與之前寫的專案通用，所以用的是原始的 class based，另一部分因為被畢業專題組員推坑，使用的是 functional component 的寫法。 Basic Settings - Routing 在整個前端開發的過程中，我遇到比較麻煩的地方有 Routing 的設置。因為這次專案並沒有很大，所以我把 routing 的規則直接寫在 App.js 裡，使用的是 react-router-dom 的套件。基本上會用到 BrowserRouter、Routes、Route 三個物件，BrowserRouter 用於處理動態內容的路徑宣告（靜態則使用 HashRouter），Routes 則為 v5 的 Switch 在 v6 的對應，也就是控制 url 與 path 的 mapping，最後 Route 的部分就是單純的路徑宣告，與該路徑對應到的元件。 import { BrowserRouter, Route, Routes } from &quot;react-router-dom&quot;; function App() { return ( &lt;&gt; &lt;Nav/&gt; &lt;div className=&#39;container py-5&#39;&gt; &lt;BrowserRouter&gt; &lt;Routes&gt; &lt;Route index element={&lt;PostContainer/&gt;}/&gt; &lt;Route path=&quot;post/:postId&quot; element={&lt;Post /&gt;}/&gt; &lt;Route path=&quot;profile&quot; element={&lt;Profile /&gt;}/&gt; &lt;Route path=&quot;login&quot; element={&lt;Login /&gt;}/&gt; &lt;Route path=&quot;signup&quot; element={&lt;Signup /&gt;}/&gt; &lt;/Routes&gt; &lt;/BrowserRouter&gt; &lt;/div&gt; &lt;/&gt; ); } Dockerfile 至於容器化的部分就真的很簡單，只需要使用正確版本的 node base image（我們用的是 node:14-alpine），接下來只要確認所有東西都有複製到容器裡，然後安裝所有套件，就可以把前端的 server 開起來了。 FROM node:14-alpine WORKDIR /forum COPY package.json . RUN yarn install COPY . . RUN npm run build EXPOSE 3000 CMD [&quot;yarn&quot;, &quot;start&quot;] 這邊沒使用 Volume 是因為還沒學到…😀🔪 後端因為是全部交給另一個組員處理，所以我能紀錄的東西也不多 QQ Docker-compose 檔案結構 在我們建置完前後端的容器後，直接在兩個專案的外面再新增一個 docker-compose 的 yaml 檔。不過因為需要 nginx 來反向代理 React 的 Node.js web server，所以需要新增一支 nginx-setup.conf 的設定檔；而後端採用 uWSGI 作為 WSGI 伺服器，因此才會有 uwsgi.ini 這個檔案。 ▾ forum/ # front-end ▸ public/ ▸ src/ Dockerfile package.json yarn-error.log yarn.lock ▾ forumserver/ # back-end ▸ forum/ Dockerfile requirements.txt start_server.sh uwsgi.ini ▾ nginx/ nginx-setup.conf docker-compose.yml WSGI &amp; Nginx 在第一次接觸到 Python web app 時，就有聽說過 WSGI 這個東西，至於 Nginx 則是連實習也都會用到的工具，在這邊先簡單介紹一下這兩個工具的用途： WSGI: Python Web Server GateWay Interface，Python 對於 Web Server 與 Web Application 之間溝通的規範。 Nginx: 可以提高 Web server 效能，對於靜態檔案有 Cache 的機制，降低 response 的等待時間，同時有均衡附載的特性，也可以作為反向代理伺服器 在採用了上述兩個工具後，專案的 request 傳遞架構會跟下圖一樣： 因為 Nginx server 無法實現 WSGI 規範，因此我們採用了 uWSGI，是一種實現了 WSGI 等規範的 server（另外一種也很常見的 WSGI server 為 Gunicorn），用於接收前端（代理）伺服器轉發的動態請求，轉發給 Web application(Django)，並接收回傳的結果、轉發給代理伺服器(Nginx)。 為了能順利使用 Nginx 與 uWSGI server 做溝通，我們需要加上 Nginx 的設定檔，基本上就是設定要聽哪個 port 來的 request，還有 API server 的位置，並且設定靜態檔案的路徑。其中 try_files 那行的意義是，當遇到無法解析的路徑時，全部都導向 index.html，這麼做就會達到讀取 React app 的效果。 upstream api { server backend:8000; } server { listen 8080; location / { root /var/www/forum; try_files $uri $uri/ /index.html =404; } location /api/ { proxy_pass http://api; proxy_set_header Host $http_host; } } docker-compose.yml 最後因為我們加上了 Nginx，因此會需要在 docker-compose.yml 裡新增一項 Nginx 的服務；所以最後總共會有前後端與 Nginx 三個服務，設置如下： version: &#39;3&#39; services: backend: build: context: ./forumserver command: /bin/sh /opt/uwsgi/start_server.sh ports: - &quot;8000:8000&quot; frontend: build: context: ./forum volumes: - react_build:/forum/build command: yarn start nginx: image: nginx:latest ports: - 80:8080 volumes: - ./nginx/nginx-setup.conf:/etc/nginx/conf.d/default.conf:ro - react_build:/var/www/forum depends_on: - backend - frontend volumes: react_build: Reference Flask 為甚麼需要 WSGI 與 Nginx Docker | Towards serving React (Nginx) with Django API (gunicorn) [Docker 教學] 如何將前端網站打包成 Docker Image" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/05/k8s-project.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/05/k8s-project.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-05T09:12:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Kubernetes 實作紀錄（上）- Web Application Settings" />
+<script type="application/ld+json">
+{"description":"今天決定來寫上學期必修課的期末報告！雖然說這堂課過得非常莫名其妙，期末專案也只有一（？）個條件，不過在建完整個專案之後還是學到蠻多東西的。至於老師提出的唯一一個條件則是要我們理解微服務到底在幹嘛，並且一定要用到 Kubernetes；在與組員討論過後，我們決定做個最簡單的論壇網站（可以註冊、登入、發文、留言），前端使用 React.js，後端使用 Django 作為 API server，用 Docker 把這兩個服務打包後，再來煩惱要怎麼用 K8s 或 Docker-compose 對這些服務做管理。 本專案的前端由 React.js (v17) 建置，部分元件因為與之前寫的專案通用，所以用的是原始的 class based，另一部分因為被畢業專題組員推坑，使用的是 functional component 的寫法。 Basic Settings - Routing 在整個前端開發的過程中，我遇到比較麻煩的地方有 Routing 的設置。因為這次專案並沒有很大，所以我把 routing 的規則直接寫在 App.js 裡，使用的是 react-router-dom 的套件。基本上會用到 BrowserRouter、Routes、Route 三個物件，BrowserRouter 用於處理動態內容的路徑宣告（靜態則使用 HashRouter），Routes 則為 v5 的 Switch 在 v6 的對應，也就是控制 url 與 path 的 mapping，最後 Route 的部分就是單純的路徑宣告，與該路徑對應到的元件。 import { BrowserRouter, Route, Routes } from &quot;react-router-dom&quot;; function App() { return ( &lt;&gt; &lt;Nav/&gt; &lt;div className=&#39;container py-5&#39;&gt; &lt;BrowserRouter&gt; &lt;Routes&gt; &lt;Route index element={&lt;PostContainer/&gt;}/&gt; &lt;Route path=&quot;post/:postId&quot; element={&lt;Post /&gt;}/&gt; &lt;Route path=&quot;profile&quot; element={&lt;Profile /&gt;}/&gt; &lt;Route path=&quot;login&quot; element={&lt;Login /&gt;}/&gt; &lt;Route path=&quot;signup&quot; element={&lt;Signup /&gt;}/&gt; &lt;/Routes&gt; &lt;/BrowserRouter&gt; &lt;/div&gt; &lt;/&gt; ); } Dockerfile 至於容器化的部分就真的很簡單，只需要使用正確版本的 node base image（我們用的是 node:14-alpine），接下來只要確認所有東西都有複製到容器裡，然後安裝所有套件，就可以把前端的 server 開起來了。 FROM node:14-alpine WORKDIR /forum COPY package.json . RUN yarn install COPY . . RUN npm run build EXPOSE 3000 CMD [&quot;yarn&quot;, &quot;start&quot;] 這邊沒使用 Volume 是因為還沒學到…😀🔪 後端因為是全部交給另一個組員處理，所以我能紀錄的東西也不多 QQ Docker-compose 檔案結構 在我們建置完前後端的容器後，直接在兩個專案的外面再新增一個 docker-compose 的 yaml 檔。不過因為需要 nginx 來反向代理 React 的 Node.js web server，所以需要新增一支 nginx-setup.conf 的設定檔；而後端採用 uWSGI 作為 WSGI 伺服器，因此才會有 uwsgi.ini 這個檔案。 ▾ forum/ # front-end ▸ public/ ▸ src/ Dockerfile package.json yarn-error.log yarn.lock ▾ forumserver/ # back-end ▸ forum/ Dockerfile requirements.txt start_server.sh uwsgi.ini ▾ nginx/ nginx-setup.conf docker-compose.yml WSGI &amp; Nginx 在第一次接觸到 Python web app 時，就有聽說過 WSGI 這個東西，至於 Nginx 則是連實習也都會用到的工具，在這邊先簡單介紹一下這兩個工具的用途： WSGI: Python Web Server GateWay Interface，Python 對於 Web Server 與 Web Application 之間溝通的規範。 Nginx: 可以提高 Web server 效能，對於靜態檔案有 Cache 的機制，降低 response 的等待時間，同時有均衡附載的特性，也可以作為反向代理伺服器 在採用了上述兩個工具後，專案的 request 傳遞架構會跟下圖一樣： 因為 Nginx server 無法實現 WSGI 規範，因此我們採用了 uWSGI，是一種實現了 WSGI 等規範的 server（另外一種也很常見的 WSGI server 為 Gunicorn），用於接收前端（代理）伺服器轉發的動態請求，轉發給 Web application(Django)，並接收回傳的結果、轉發給代理伺服器(Nginx)。 為了能順利使用 Nginx 與 uWSGI server 做溝通，我們需要加上 Nginx 的設定檔，基本上就是設定要聽哪個 port 來的 request，還有 API server 的位置，並且設定靜態檔案的路徑。其中 try_files 那行的意義是，當遇到無法解析的路徑時，全部都導向 index.html，這麼做就會達到讀取 React app 的效果。 upstream api { server backend:8000; } server { listen 8080; location / { root /var/www/forum; try_files $uri $uri/ /index.html =404; } location /api/ { proxy_pass http://api; proxy_set_header Host $http_host; } } docker-compose.yml 最後因為我們加上了 Nginx，因此會需要在 docker-compose.yml 裡新增一項 Nginx 的服務；所以最後總共會有前後端與 Nginx 三個服務，設置如下： version: &#39;3&#39; services: backend: build: context: ./forumserver command: /bin/sh /opt/uwsgi/start_server.sh ports: - &quot;8000:8000&quot; frontend: build: context: ./forum volumes: - react_build:/forum/build command: yarn start nginx: image: nginx:latest ports: - 80:8080 volumes: - ./nginx/nginx-setup.conf:/etc/nginx/conf.d/default.conf:ro - react_build:/var/www/forum depends_on: - backend - frontend volumes: react_build: Reference Flask 為甚麼需要 WSGI 與 Nginx Docker | Towards serving React (Nginx) with Django API (gunicorn) [Docker 教學] 如何將前端網站打包成 Docker Image","url":"https://jqlynchien713.github.io/2022/02/05/k8s-project.html","headline":"Kubernetes 實作紀錄（上）- Web Application Settings","@type":"BlogPosting","dateModified":"2022-02-05T09:12:00+00:00","datePublished":"2022-02-05T09:12:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/05/k8s-project.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Kubernetes 實作紀錄（上）- Web Application Settings</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-05T09:12:00+00:00" itemprop="datePublished">Feb 5, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 15 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">deploy</span>
+    
+      <span class="tag">k8s</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#basic-settings---routing">Basic Settings - Routing</a></li><li><a href="#dockerfile">Dockerfile</a></li><li><a href="#docker-compose">Docker-compose</a><ul><li><a href="#檔案結構">檔案結構</a></li><li><a href="#wsgi--nginx">WSGI &amp; Nginx</a></li><li><a href="#docker-composeyml">docker-compose.yml</a></li></ul></li></ul></div>
+    <p>今天決定來寫上學期必修課的期末報告！雖然說這堂課過得非常莫名其妙，期末專案也只有一（？）個條件，不過在建完整個專案之後還是學到蠻多東西的。至於老師提出的唯一一個條件則是要我們理解微服務到底在幹嘛，並且一定要用到 Kubernetes；在與組員討論過後，我們決定做個最簡單的論壇網站（可以註冊、登入、發文、留言），前端使用 React.js，後端使用 Django 作為 API server，用 Docker 把這兩個服務打包後，再來煩惱要怎麼用 K8s 或 Docker-compose 對這些服務做管理。</p>
+
+<p>本專案的前端由 React.js (v17) 建置，部分元件因為與之前寫的專案通用，所以用的是原始的 class based，另一部分<del>因為被畢業專題組員推坑</del>，使用的是 functional component 的寫法。</p>
+
+<h2 id="basic-settings---routing">Basic Settings - Routing</h2>
+<p>在整個前端開發的過程中，我遇到比較麻煩的地方有 Routing 的設置。因為這次專案並沒有很大，所以我把 routing 的規則直接寫在 App.js 裡，使用的是 <code class="language-plaintext highlighter-rouge">react-router-dom</code> 的套件。基本上會用到 BrowserRouter、Routes、Route 三個物件，<code class="language-plaintext highlighter-rouge">BrowserRouter</code> 用於處理動態內容的路徑宣告（靜態則使用 <code class="language-plaintext highlighter-rouge">HashRouter</code>），<code class="language-plaintext highlighter-rouge">Routes</code> 則為 v5 的 <code class="language-plaintext highlighter-rouge">Switch</code> 在 v6 的對應，也就是控制 url 與 path 的 mapping，最後 <code class="language-plaintext highlighter-rouge">Route</code> 的部分就是單純的路徑宣告，與該路徑對應到的元件。</p>
+
+<div class="language-jsx highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">BrowserRouter</span><span class="p">,</span> <span class="nx">Route</span><span class="p">,</span> <span class="nx">Routes</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">react-router-dom</span><span class="dl">"</span><span class="p">;</span>
+
+<span class="kd">function</span> <span class="nx">App</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="p">(</span>
+    <span class="p">&lt;&gt;</span>
+      <span class="p">&lt;</span><span class="nc">Nav</span><span class="p">/&gt;</span>
+      <span class="p">&lt;</span><span class="nt">div</span> <span class="na">className</span><span class="p">=</span><span class="s">'container py-5'</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nc">BrowserRouter</span><span class="p">&gt;</span>
+          <span class="p">&lt;</span><span class="nc">Routes</span><span class="p">&gt;</span>
+              <span class="p">&lt;</span><span class="nc">Route</span> <span class="na">index</span> <span class="na">element</span><span class="p">=</span><span class="si">{</span><span class="p">&lt;</span><span class="nc">PostContainer</span><span class="p">/&gt;</span><span class="si">}</span><span class="p">/&gt;</span>
+              <span class="p">&lt;</span><span class="nc">Route</span> <span class="na">path</span><span class="p">=</span><span class="s">"post/:postId"</span> <span class="na">element</span><span class="p">=</span><span class="si">{</span><span class="p">&lt;</span><span class="nc">Post</span> <span class="p">/&gt;</span><span class="si">}</span><span class="p">/&gt;</span>
+              <span class="p">&lt;</span><span class="nc">Route</span> <span class="na">path</span><span class="p">=</span><span class="s">"profile"</span> <span class="na">element</span><span class="p">=</span><span class="si">{</span><span class="p">&lt;</span><span class="nc">Profile</span> <span class="p">/&gt;</span><span class="si">}</span><span class="p">/&gt;</span>
+              <span class="p">&lt;</span><span class="nc">Route</span> <span class="na">path</span><span class="p">=</span><span class="s">"login"</span> <span class="na">element</span><span class="p">=</span><span class="si">{</span><span class="p">&lt;</span><span class="nc">Login</span> <span class="p">/&gt;</span><span class="si">}</span><span class="p">/&gt;</span>
+              <span class="p">&lt;</span><span class="nc">Route</span> <span class="na">path</span><span class="p">=</span><span class="s">"signup"</span> <span class="na">element</span><span class="p">=</span><span class="si">{</span><span class="p">&lt;</span><span class="nc">Signup</span> <span class="p">/&gt;</span><span class="si">}</span><span class="p">/&gt;</span>
+          <span class="p">&lt;/</span><span class="nc">Routes</span><span class="p">&gt;</span>
+        <span class="p">&lt;/</span><span class="nc">BrowserRouter</span><span class="p">&gt;</span>
+      <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+    <span class="p">&lt;/&gt;</span>
+  <span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="dockerfile">Dockerfile</h2>
+<p>至於容器化的部分就真的很簡單，只需要使用正確版本的 node base image（我們用的是 node:14-alpine），接下來只要確認所有東西都有複製到容器裡，然後安裝所有套件，就可以把前端的 server 開起來了。</p>
+<div class="language-Dockerfile highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">FROM</span><span class="s"> node:14-alpine</span>
+<span class="k">WORKDIR</span><span class="s"> /forum</span>
+<span class="k">COPY</span><span class="s"> package.json .</span>
+<span class="k">RUN </span>yarn <span class="nb">install</span>
+<span class="k">COPY</span><span class="s"> . .</span>
+<span class="k">RUN </span>npm run build
+<span class="k">EXPOSE</span><span class="s"> 3000</span>
+<span class="k">CMD</span><span class="s"> ["yarn", "start"]</span>
+</code></pre></div></div>
+<blockquote>
+  <p>這邊沒使用 Volume 是因為還沒學到…😀🔪<br />
+後端因為是全部交給另一個組員處理，所以我能紀錄的東西也不多 QQ</p>
+</blockquote>
+
+<h2 id="docker-compose">Docker-compose</h2>
+<h3 id="檔案結構">檔案結構</h3>
+<p>在我們建置完前後端的容器後，直接在兩個專案的外面再新增一個 docker-compose 的 yaml 檔。不過因為需要 nginx 來反向代理 React 的 Node.js web server，所以需要新增一支 <code class="language-plaintext highlighter-rouge">nginx-setup.conf</code> 的設定檔；而後端採用 uWSGI 作為 WSGI 伺服器，因此才會有 <code class="language-plaintext highlighter-rouge">uwsgi.ini</code> 這個檔案。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>▾ forum/  # front-end
+  ▸ public/
+  ▸ src/
+    Dockerfile
+    package.json
+    yarn-error.log
+    yarn.lock
+▾ forumserver/  # back-end
+  ▸ forum/
+    Dockerfile
+    requirements.txt
+    start_server.sh
+    uwsgi.ini
+▾ nginx/
+    nginx-setup.conf
+  docker-compose.yml
+</code></pre></div></div>
+
+<h3 id="wsgi--nginx">WSGI &amp; Nginx</h3>
+<p>在第一次接觸到 Python web app 時，就有聽說過 WSGI 這個東西，至於 Nginx 則是連實習也都會用到的工具，在這邊先簡單介紹一下這兩個工具的用途：</p>
+<ul>
+  <li>WSGI: Python Web Server GateWay Interface，Python 對於 Web Server 與 Web Application 之間溝通的規範。</li>
+  <li>Nginx: 可以提高 Web server 效能，對於靜態檔案有 Cache 的機制，降低 response 的等待時間，同時有均衡附載的特性，也可以作為反向代理伺服器</li>
+</ul>
+
+<p>在採用了上述兩個工具後，專案的 request 傳遞架構會跟下圖一樣：</p>
+
+<p><img src="/assets/img/docker-compose.jpg" alt="" /></p>
+
+<p>因為 Nginx server 無法實現 WSGI 規範，因此我們採用了 uWSGI，是一種實現了 WSGI 等規範的 server（另外一種也很常見的 WSGI server 為 Gunicorn），用於接收前端（代理）伺服器轉發的動態請求，轉發給 Web application(Django)，並接收回傳的結果、轉發給代理伺服器(Nginx)。</p>
+
+<p>為了能順利使用 Nginx 與 uWSGI server 做溝通，我們需要加上 Nginx 的設定檔，基本上就是設定要聽哪個 port 來的 request，還有 API server 的位置，並且設定靜態檔案的路徑。其中 <code class="language-plaintext highlighter-rouge">try_files</code> 那行的意義是，當遇到無法解析的路徑時，全部都導向 <code class="language-plaintext highlighter-rouge">index.html</code>，這麼做就會達到讀取 React app 的效果。</p>
+
+<div class="language-nginx highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">upstream</span> <span class="s">api</span> <span class="p">{</span>
+    <span class="kn">server</span> <span class="nf">backend</span><span class="p">:</span><span class="mi">8000</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">server</span> <span class="p">{</span>
+  <span class="kn">listen</span> <span class="mi">8080</span><span class="p">;</span>
+
+  <span class="kn">location</span> <span class="n">/</span> <span class="p">{</span>
+    <span class="kn">root</span> <span class="n">/var/www/forum</span><span class="p">;</span>
+    <span class="kn">try_files</span> <span class="nv">$uri</span> <span class="nv">$uri</span><span class="n">/</span> <span class="n">/index.html</span> <span class="p">=</span><span class="mi">404</span><span class="p">;</span>
+  <span class="p">}</span>
+
+  <span class="kn">location</span> <span class="n">/api/</span> <span class="p">{</span>
+    <span class="kn">proxy_pass</span> <span class="s">http://api</span><span class="p">;</span>
+    <span class="kn">proxy_set_header</span> <span class="s">Host</span> <span class="nv">$http_host</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="docker-composeyml">docker-compose.yml</h3>
+<p>最後因為我們加上了 Nginx，因此會需要在 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 裡新增一項 Nginx 的服務；所以最後總共會有前後端與 Nginx 三個服務，設置如下：</p>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">3'</span>
+
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">backend</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span>
+      <span class="na">context</span><span class="pi">:</span> <span class="s">./forumserver</span>
+    <span class="na">command</span><span class="pi">:</span> <span class="s">/bin/sh /opt/uwsgi/start_server.sh</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">8000:8000"</span>
+  <span class="na">frontend</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span>
+      <span class="na">context</span><span class="pi">:</span> <span class="s">./forum</span>
+    <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">react_build:/forum/build</span>
+    <span class="na">command</span><span class="pi">:</span> <span class="s">yarn start</span>
+  <span class="na">nginx</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">nginx:latest</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">80:8080</span>
+    <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">./nginx/nginx-setup.conf:/etc/nginx/conf.d/default.conf:ro</span>
+      <span class="pi">-</span> <span class="s">react_build:/var/www/forum</span>
+    <span class="na">depends_on</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">backend</span>
+      <span class="pi">-</span> <span class="s">frontend</span>
+<span class="na">volumes</span><span class="pi">:</span>
+  <span class="na">react_build</span><span class="pi">:</span>
+
+</code></pre></div></div>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://www.maxlist.xyz/2020/05/06/flask-wsgi-nginx/">Flask 為甚麼需要 WSGI 與 Nginx</a></li>
+  <li><a href="https://www.youtube.com/watch?v=e63EBEFJkH0">Docker | Towards serving React (Nginx) with Django API (gunicorn)</a></li>
+  <li><a href="https://youtu.be/QdTmWAaB38A?t=376">[Docker 教學] 如何將前端網站打包成 Docker Image</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/05/k8s-project.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

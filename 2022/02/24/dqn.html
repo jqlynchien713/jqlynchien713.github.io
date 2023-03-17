@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>DQN 學習筆記 | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="DQN 學習筆記" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了 Basic Components Env, Actor, Reward Funciton, Episode &amp; Trajectory Trajectory: \(\tau = \{s_i, a_i,\dots\}\) in 1 episode 可以計算特定 (action, state) pair 出現的機率\(P_\theta(\tau) = p(s_1)p_\theta(a_1\|s_1)p(s_2\|s_1, a_1)p_\theta(a_2\|s_2)p(s_3\|s_2, a_2)\dots\\=P(s_1)\prod_{t=1}^{T}p_\theta(a_t\|s_t)p(s_{t+1}\|s_t, a_t)\) 更新 \(\theta\) 找到最大的 reward: \(\max R(\tau)=\sum_t^Tr_t\) Env &amp; Reward 為隨機變數，因此只能算期望值： \(\bar{R}_\theta = \sum R(\tau)p_\theta(\tau) = E_{\tau\sim p_\theta(\tau)}[R(\tau)]\) Gradient Ascent: Maximize expected reward 目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率 \(\nabla \bar{R_\theta}=\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) 需要不斷從 trajectory set sample data Tips for implementation 將 state(input) &amp; action(output) 視為分類問題 一般分類問題 objective function：min cross entropy = max log likelihood 轉換成 RL 時要多乘上 reward \(\frac{1}{N}\sum_n^N\sum_t^{T_n} \nabla\log p_\theta(a_t^n\|s_t^n)\Rightarrow\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) Add a baseline 情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward 解法：讓 reward 不要總是正的 \(\rightarrow\) Reward - baseline(ex. \(\bar{\tau^n}\)) Assign Suitable Credit 問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率 解法：只計算執行此 action 後的 reward 新的更新方式： \(\frac{1}{N}\sum_n^N\sum_t^{T_n} (R(\tau^n)-b)\nabla\log p_\theta(a_t^n\|s_t^n)\) b 取決於 state \((R(\tau^n)-b)\) 為 advantage function \(A^\theta(s_t, a_t)\) Proximal Policy Optimization, PPO Off-Policy On-policy vs. Off-policy On: agent 和環境互動＋學習 Off: 學習的 agent \(\neq\) 互動的 agent，aka agent 在旁邊看別人玩（並學） On-policy 的問題：更新 model 後需要重新 sample data Off-policy 如何解決：sample \(\pi_{\theta&#39;}\) 來訓練 \(\pi_\theta \rightarrow\) reuse sampled data Importance Sampling 無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣 且 sample q 次數夠多則可越趨近於 p(x) \(E_{x\sim p}[f(x)]=E_{x\sim q}[f(x)\frac{p(x)}{q(x)}]\) \(\frac{p(x)}{q(x)}\)為修正從 q 抽樣的調整項 Off-policy 做 gradient ascent 時的調整 \(\nabla \bar{R_\theta}=E_{\tau\sim p_\theta(\tau)}[R(\tau)\nabla\log p_\theta(\tau)]\rightarrow E_{\tau\sim p_{\theta&#39;}(\tau)}[\frac{p_\theta(\tau)}{p_{\theta&#39;}(\tau)}R(\tau)\nabla\log p_\theta(\tau)]\) New Objective Function \(J^{\theta&#39;}(\theta)=E_{(s_t,a_t)\sim \pi_{\theta&#39;}(\tau)}[\frac{p_\theta(a_t\|s_t)}{p_{\theta&#39;}(a_t\|s_t)}A^{\theta&#39;}(s_t, a_t)]\) \(\theta&#39;\): demo \(\theta\): update PPO: 限制 \(\pi\) 與 \(\pi&#39;\) 間的相似度 \[J_{PPO}^{\theta&#39;}=J^{\theta&#39;}(\theta)-\beta\cdot KL(\theta, \theta&#39;)\] PPO2: Q Learning(Value-based) Learn Critic: 評價 actor \(\pi\) 做得多好（而不是 state） State value function \(V^\pi(s)\) 定義：given s，到結束的累積期望 reward Estimate \(V^\pi(s)\) Monte-Carlo based 看到 state a 回傳 cumulated gain a 不可能掃過所有 state \(\rightarrow V^\pi(s)\) 視為 regression Temporal-difference appoarch \(\because s_t, a_t, r_t \rightarrow s_{t+1}, a_{t+1}, r_{t+1}\) MC vs. TD: 不同手段估出來的結果可能不同 MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward TD: smaller variance，因為每次只計算一個 r，但 \(V^\pi\) 可能估的不準 State-action value function \(Q^\pi(s, a)\) 定義：在 state s 強制採取 action a，後續採用 \(\pi\) 的累積期望 reward （agent 不一定會採用 a） 使用 Q function 更新 \(\pi\) 的流程 Tips: Target Network Exploration 原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data 解法： Epsilon Greedy: Boltzmann Exploration Replay Buffer 減少和環境互動的次數 可提升 batch data diversity Off-policy: 因為過去的 exp 不一定來自 \(\pi\) Advanced Tips Double DQN 問題：DQN 會高估 Q value 估計誤差 \(\rightarrow\) 選到高估的 action \(\rightarrow\) target值會被設太高 解法：選 action 的 Q function \(\neq\) 算 Q value 的 Q function Dueling DQN 改變 network 架構，\(Q(s, a)\rightarrow Q(s, a)=V(s)+A(s, a)\) 提升估計 Q value 的效率，不用每個 pair 都被 sample \(\because\) 更新 \(V(s)\) 比 sample 有效率 A 的 column 合為 0，確保更新 V Priority Reply 從 buffer 裡選擇 TD error 較大的 experience set 改變 sample data 的 distribution &amp; training process" />
+<meta property="og:description" content="這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了 Basic Components Env, Actor, Reward Funciton, Episode &amp; Trajectory Trajectory: \(\tau = \{s_i, a_i,\dots\}\) in 1 episode 可以計算特定 (action, state) pair 出現的機率\(P_\theta(\tau) = p(s_1)p_\theta(a_1\|s_1)p(s_2\|s_1, a_1)p_\theta(a_2\|s_2)p(s_3\|s_2, a_2)\dots\\=P(s_1)\prod_{t=1}^{T}p_\theta(a_t\|s_t)p(s_{t+1}\|s_t, a_t)\) 更新 \(\theta\) 找到最大的 reward: \(\max R(\tau)=\sum_t^Tr_t\) Env &amp; Reward 為隨機變數，因此只能算期望值： \(\bar{R}_\theta = \sum R(\tau)p_\theta(\tau) = E_{\tau\sim p_\theta(\tau)}[R(\tau)]\) Gradient Ascent: Maximize expected reward 目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率 \(\nabla \bar{R_\theta}=\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) 需要不斷從 trajectory set sample data Tips for implementation 將 state(input) &amp; action(output) 視為分類問題 一般分類問題 objective function：min cross entropy = max log likelihood 轉換成 RL 時要多乘上 reward \(\frac{1}{N}\sum_n^N\sum_t^{T_n} \nabla\log p_\theta(a_t^n\|s_t^n)\Rightarrow\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) Add a baseline 情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward 解法：讓 reward 不要總是正的 \(\rightarrow\) Reward - baseline(ex. \(\bar{\tau^n}\)) Assign Suitable Credit 問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率 解法：只計算執行此 action 後的 reward 新的更新方式： \(\frac{1}{N}\sum_n^N\sum_t^{T_n} (R(\tau^n)-b)\nabla\log p_\theta(a_t^n\|s_t^n)\) b 取決於 state \((R(\tau^n)-b)\) 為 advantage function \(A^\theta(s_t, a_t)\) Proximal Policy Optimization, PPO Off-Policy On-policy vs. Off-policy On: agent 和環境互動＋學習 Off: 學習的 agent \(\neq\) 互動的 agent，aka agent 在旁邊看別人玩（並學） On-policy 的問題：更新 model 後需要重新 sample data Off-policy 如何解決：sample \(\pi_{\theta&#39;}\) 來訓練 \(\pi_\theta \rightarrow\) reuse sampled data Importance Sampling 無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣 且 sample q 次數夠多則可越趨近於 p(x) \(E_{x\sim p}[f(x)]=E_{x\sim q}[f(x)\frac{p(x)}{q(x)}]\) \(\frac{p(x)}{q(x)}\)為修正從 q 抽樣的調整項 Off-policy 做 gradient ascent 時的調整 \(\nabla \bar{R_\theta}=E_{\tau\sim p_\theta(\tau)}[R(\tau)\nabla\log p_\theta(\tau)]\rightarrow E_{\tau\sim p_{\theta&#39;}(\tau)}[\frac{p_\theta(\tau)}{p_{\theta&#39;}(\tau)}R(\tau)\nabla\log p_\theta(\tau)]\) New Objective Function \(J^{\theta&#39;}(\theta)=E_{(s_t,a_t)\sim \pi_{\theta&#39;}(\tau)}[\frac{p_\theta(a_t\|s_t)}{p_{\theta&#39;}(a_t\|s_t)}A^{\theta&#39;}(s_t, a_t)]\) \(\theta&#39;\): demo \(\theta\): update PPO: 限制 \(\pi\) 與 \(\pi&#39;\) 間的相似度 \[J_{PPO}^{\theta&#39;}=J^{\theta&#39;}(\theta)-\beta\cdot KL(\theta, \theta&#39;)\] PPO2: Q Learning(Value-based) Learn Critic: 評價 actor \(\pi\) 做得多好（而不是 state） State value function \(V^\pi(s)\) 定義：given s，到結束的累積期望 reward Estimate \(V^\pi(s)\) Monte-Carlo based 看到 state a 回傳 cumulated gain a 不可能掃過所有 state \(\rightarrow V^\pi(s)\) 視為 regression Temporal-difference appoarch \(\because s_t, a_t, r_t \rightarrow s_{t+1}, a_{t+1}, r_{t+1}\) MC vs. TD: 不同手段估出來的結果可能不同 MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward TD: smaller variance，因為每次只計算一個 r，但 \(V^\pi\) 可能估的不準 State-action value function \(Q^\pi(s, a)\) 定義：在 state s 強制採取 action a，後續採用 \(\pi\) 的累積期望 reward （agent 不一定會採用 a） 使用 Q function 更新 \(\pi\) 的流程 Tips: Target Network Exploration 原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data 解法： Epsilon Greedy: Boltzmann Exploration Replay Buffer 減少和環境互動的次數 可提升 batch data diversity Off-policy: 因為過去的 exp 不一定來自 \(\pi\) Advanced Tips Double DQN 問題：DQN 會高估 Q value 估計誤差 \(\rightarrow\) 選到高估的 action \(\rightarrow\) target值會被設太高 解法：選 action 的 Q function \(\neq\) 算 Q value 的 Q function Dueling DQN 改變 network 架構，\(Q(s, a)\rightarrow Q(s, a)=V(s)+A(s, a)\) 提升估計 Q value 的效率，不用每個 pair 都被 sample \(\because\) 更新 \(V(s)\) 比 sample 有效率 A 的 column 合為 0，確保更新 V Priority Reply 從 buffer 裡選擇 TD error 較大的 experience set 改變 sample data 的 distribution &amp; training process" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/24/dqn.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/24/dqn.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-24T07:51:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="DQN 學習筆記" />
+<script type="application/ld+json">
+{"description":"這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了 Basic Components Env, Actor, Reward Funciton, Episode &amp; Trajectory Trajectory: \\(\\tau = \\{s_i, a_i,\\dots\\}\\) in 1 episode 可以計算特定 (action, state) pair 出現的機率\\(P_\\theta(\\tau) = p(s_1)p_\\theta(a_1\\|s_1)p(s_2\\|s_1, a_1)p_\\theta(a_2\\|s_2)p(s_3\\|s_2, a_2)\\dots\\\\=P(s_1)\\prod_{t=1}^{T}p_\\theta(a_t\\|s_t)p(s_{t+1}\\|s_t, a_t)\\) 更新 \\(\\theta\\) 找到最大的 reward: \\(\\max R(\\tau)=\\sum_t^Tr_t\\) Env &amp; Reward 為隨機變數，因此只能算期望值： \\(\\bar{R}_\\theta = \\sum R(\\tau)p_\\theta(\\tau) = E_{\\tau\\sim p_\\theta(\\tau)}[R(\\tau)]\\) Gradient Ascent: Maximize expected reward 目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率 \\(\\nabla \\bar{R_\\theta}=\\frac{1}{N}\\sum_n^N\\sum_t^{T_n} R(\\tau^n)\\nabla\\log p_\\theta(a_t^n\\|s_t^n)\\) 需要不斷從 trajectory set sample data Tips for implementation 將 state(input) &amp; action(output) 視為分類問題 一般分類問題 objective function：min cross entropy = max log likelihood 轉換成 RL 時要多乘上 reward \\(\\frac{1}{N}\\sum_n^N\\sum_t^{T_n} \\nabla\\log p_\\theta(a_t^n\\|s_t^n)\\Rightarrow\\frac{1}{N}\\sum_n^N\\sum_t^{T_n} R(\\tau^n)\\nabla\\log p_\\theta(a_t^n\\|s_t^n)\\) Add a baseline 情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward 解法：讓 reward 不要總是正的 \\(\\rightarrow\\) Reward - baseline(ex. \\(\\bar{\\tau^n}\\)) Assign Suitable Credit 問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率 解法：只計算執行此 action 後的 reward 新的更新方式： \\(\\frac{1}{N}\\sum_n^N\\sum_t^{T_n} (R(\\tau^n)-b)\\nabla\\log p_\\theta(a_t^n\\|s_t^n)\\) b 取決於 state \\((R(\\tau^n)-b)\\) 為 advantage function \\(A^\\theta(s_t, a_t)\\) Proximal Policy Optimization, PPO Off-Policy On-policy vs. Off-policy On: agent 和環境互動＋學習 Off: 學習的 agent \\(\\neq\\) 互動的 agent，aka agent 在旁邊看別人玩（並學） On-policy 的問題：更新 model 後需要重新 sample data Off-policy 如何解決：sample \\(\\pi_{\\theta&#39;}\\) 來訓練 \\(\\pi_\\theta \\rightarrow\\) reuse sampled data Importance Sampling 無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣 且 sample q 次數夠多則可越趨近於 p(x) \\(E_{x\\sim p}[f(x)]=E_{x\\sim q}[f(x)\\frac{p(x)}{q(x)}]\\) \\(\\frac{p(x)}{q(x)}\\)為修正從 q 抽樣的調整項 Off-policy 做 gradient ascent 時的調整 \\(\\nabla \\bar{R_\\theta}=E_{\\tau\\sim p_\\theta(\\tau)}[R(\\tau)\\nabla\\log p_\\theta(\\tau)]\\rightarrow E_{\\tau\\sim p_{\\theta&#39;}(\\tau)}[\\frac{p_\\theta(\\tau)}{p_{\\theta&#39;}(\\tau)}R(\\tau)\\nabla\\log p_\\theta(\\tau)]\\) New Objective Function \\(J^{\\theta&#39;}(\\theta)=E_{(s_t,a_t)\\sim \\pi_{\\theta&#39;}(\\tau)}[\\frac{p_\\theta(a_t\\|s_t)}{p_{\\theta&#39;}(a_t\\|s_t)}A^{\\theta&#39;}(s_t, a_t)]\\) \\(\\theta&#39;\\): demo \\(\\theta\\): update PPO: 限制 \\(\\pi\\) 與 \\(\\pi&#39;\\) 間的相似度 \\[J_{PPO}^{\\theta&#39;}=J^{\\theta&#39;}(\\theta)-\\beta\\cdot KL(\\theta, \\theta&#39;)\\] PPO2: Q Learning(Value-based) Learn Critic: 評價 actor \\(\\pi\\) 做得多好（而不是 state） State value function \\(V^\\pi(s)\\) 定義：given s，到結束的累積期望 reward Estimate \\(V^\\pi(s)\\) Monte-Carlo based 看到 state a 回傳 cumulated gain a 不可能掃過所有 state \\(\\rightarrow V^\\pi(s)\\) 視為 regression Temporal-difference appoarch \\(\\because s_t, a_t, r_t \\rightarrow s_{t+1}, a_{t+1}, r_{t+1}\\) MC vs. TD: 不同手段估出來的結果可能不同 MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward TD: smaller variance，因為每次只計算一個 r，但 \\(V^\\pi\\) 可能估的不準 State-action value function \\(Q^\\pi(s, a)\\) 定義：在 state s 強制採取 action a，後續採用 \\(\\pi\\) 的累積期望 reward （agent 不一定會採用 a） 使用 Q function 更新 \\(\\pi\\) 的流程 Tips: Target Network Exploration 原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data 解法： Epsilon Greedy: Boltzmann Exploration Replay Buffer 減少和環境互動的次數 可提升 batch data diversity Off-policy: 因為過去的 exp 不一定來自 \\(\\pi\\) Advanced Tips Double DQN 問題：DQN 會高估 Q value 估計誤差 \\(\\rightarrow\\) 選到高估的 action \\(\\rightarrow\\) target值會被設太高 解法：選 action 的 Q function \\(\\neq\\) 算 Q value 的 Q function Dueling DQN 改變 network 架構，\\(Q(s, a)\\rightarrow Q(s, a)=V(s)+A(s, a)\\) 提升估計 Q value 的效率，不用每個 pair 都被 sample \\(\\because\\) 更新 \\(V(s)\\) 比 sample 有效率 A 的 column 合為 0，確保更新 V Priority Reply 從 buffer 裡選擇 TD error 較大的 experience set 改變 sample data 的 distribution &amp; training process","url":"https://jqlynchien713.github.io/2022/02/24/dqn.html","headline":"DQN 學習筆記","@type":"BlogPosting","dateModified":"2022-02-24T07:51:00+00:00","datePublished":"2022-02-24T07:51:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/24/dqn.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">DQN 學習筆記</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-24T07:51:00+00:00" itemprop="datePublished">Feb 24, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 10 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">research</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#basic-components">Basic Components</a></li><li><a href="#gradient-ascent-maximize-expected-reward">Gradient Ascent: Maximize expected reward</a></li><li><a href="#proximal-policy-optimization-ppo">Proximal Policy Optimization, PPO</a></li><li><a href="#q-learningvalue-based">Q Learning(Value-based)</a></li></ul></div>
+    <blockquote>
+  <p>這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了</p>
+</blockquote>
+
+<h2 id="basic-components">Basic Components</h2>
+<p><img src="https://i.imgur.com/Ht2mciG.png" width="300" /></p>
+
+<ul>
+  <li>Env, Actor, Reward Funciton, Episode &amp; Trajectory</li>
+  <li>Trajectory: \(\tau = \{s_i, a_i,\dots\}\) in 1 episode</li>
+  <li>可以計算特定 (action, state) pair 出現的機率\(P_\theta(\tau) = p(s_1)p_\theta(a_1\|s_1)p(s_2\|s_1, a_1)p_\theta(a_2\|s_2)p(s_3\|s_2, a_2)\dots\\=P(s_1)\prod_{t=1}^{T}p_\theta(a_t\|s_t)p(s_{t+1}\|s_t, a_t)\)</li>
+  <li>更新 \(\theta\) 找到最大的 reward: \(\max R(\tau)=\sum_t^Tr_t\)
+    <ul>
+      <li>Env &amp; Reward 為隨機變數，因此只能算期望值： \(\bar{R}_\theta = \sum R(\tau)p_\theta(\tau) = E_{\tau\sim p_\theta(\tau)}[R(\tau)]\)</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="gradient-ascent-maximize-expected-reward">Gradient Ascent: Maximize expected reward</h2>
+<ul>
+  <li>目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率
+   \(\nabla \bar{R_\theta}=\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\)</li>
+  <li>需要不斷從 trajectory set sample data
+<img src="https://i.imgur.com/Q6sCVDq.png" alt="" /></li>
+  <li>Tips for implementation
+    <ul>
+      <li>將 state(input) &amp; action(output) 視為分類問題
+        <ul>
+          <li>一般分類問題 objective function：min cross entropy = max log likelihood</li>
+          <li>轉換成 RL 時要多乘上 reward
+  \(\frac{1}{N}\sum_n^N\sum_t^{T_n} \nabla\log p_\theta(a_t^n\|s_t^n)\Rightarrow\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\)</li>
+        </ul>
+      </li>
+      <li>Add a baseline
+        <ul>
+          <li>情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward</li>
+          <li>解法：讓 reward 不要總是正的 \(\rightarrow\) Reward - baseline(ex. \(\bar{\tau^n}\))</li>
+        </ul>
+      </li>
+      <li>Assign Suitable Credit
+        <ul>
+          <li>問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率</li>
+          <li>解法：只計算執行此 action 後的 reward
+<img src="https://i.imgur.com/8J18po0.png" alt="" /></li>
+          <li>新的更新方式：
+  \(\frac{1}{N}\sum_n^N\sum_t^{T_n} (R(\tau^n)-b)\nabla\log p_\theta(a_t^n\|s_t^n)\)
+            <ul>
+              <li>b 取決於 state</li>
+              <li>\((R(\tau^n)-b)\) 為 advantage function \(A^\theta(s_t, a_t)\)</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="proximal-policy-optimization-ppo">Proximal Policy Optimization, PPO</h2>
+<ul>
+  <li>Off-Policy
+    <ul>
+      <li>On-policy vs. Off-policy
+        <ul>
+          <li>On: agent 和環境互動＋學習</li>
+          <li>Off: 學習的 agent \(\neq\) 互動的 agent，aka agent 在旁邊看別人玩（並學）</li>
+        </ul>
+      </li>
+      <li>On-policy 的問題：更新 model 後需要重新 sample data</li>
+      <li>
+        <p>Off-policy 如何解決：sample \(\pi_{\theta'}\) 來訓練 \(\pi_\theta \rightarrow\) reuse sampled data</p>
+
+        <blockquote>
+          <p><strong>Importance Sampling</strong> <br />
+無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣
+且 sample q 次數夠多則可越趨近於 p(x)
+\(E_{x\sim p}[f(x)]=E_{x\sim q}[f(x)\frac{p(x)}{q(x)}]\)
+\(\frac{p(x)}{q(x)}\)為修正從 q 抽樣的調整項</p>
+        </blockquote>
+      </li>
+      <li>Off-policy 做 gradient ascent 時的調整
+  \(\nabla \bar{R_\theta}=E_{\tau\sim p_\theta(\tau)}[R(\tau)\nabla\log p_\theta(\tau)]\rightarrow E_{\tau\sim p_{\theta'}(\tau)}[\frac{p_\theta(\tau)}{p_{\theta'}(\tau)}R(\tau)\nabla\log p_\theta(\tau)]\)</li>
+      <li>New Objective Function
+  \(J^{\theta'}(\theta)=E_{(s_t,a_t)\sim \pi_{\theta'}(\tau)}[\frac{p_\theta(a_t\|s_t)}{p_{\theta'}(a_t\|s_t)}A^{\theta'}(s_t, a_t)]\)
+        <ul>
+          <li>\(\theta'\): demo</li>
+          <li>\(\theta\): update</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>PPO: 限制 \(\pi\) 與 \(\pi'\) 間的相似度
+    <ul>
+      <li>
+\[J_{PPO}^{\theta'}=J^{\theta'}(\theta)-\beta\cdot KL(\theta, \theta')\]
+      </li>
+    </ul>
+  </li>
+  <li>PPO2:</li>
+</ul>
+
+<h2 id="q-learningvalue-based">Q Learning(Value-based)</h2>
+<p>Learn Critic: 評價 <strong>actor \(\pi\)</strong> 做得多好（而不是 state）</p>
+<ul>
+  <li>State value function \(V^\pi(s)\)
+    <ul>
+      <li>定義：given s，到結束的累積<strong>期望</strong> reward</li>
+      <li>Estimate \(V^\pi(s)\)
+        <ul>
+          <li>Monte-Carlo based
+            <ul>
+              <li>看到 state a 回傳 cumulated gain a</li>
+              <li>不可能掃過所有 state \(\rightarrow V^\pi(s)\) 視為 regression</li>
+            </ul>
+          </li>
+          <li>Temporal-difference appoarch
+\(\because s_t, a_t, r_t \rightarrow s_{t+1}, a_{t+1}, r_{t+1}\)
+<img src="https://i.imgur.com/DiOr0kj.png" alt="" /></li>
+          <li>MC vs. TD: 不同手段估出來的結果可能不同
+            <ul>
+              <li>MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward</li>
+              <li>TD: smaller variance，因為每次只計算一個 r，但 \(V^\pi\) 可能估的不準</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>State-action value function \(Q^\pi(s, a)\)
+    <ul>
+      <li>定義：<span style="background: #FFFF33">在 state s <strong>強制採取 action a</strong>，後續採用 \(\pi\) 的累積期望 reward</span>
+  （agent 不一定會採用 a）
+  <img src="https://i.imgur.com/ONuC5sa.png" alt="" /></li>
+      <li>使用 Q function 更新 \(\pi\) 的流程
+  <img src="https://i.imgur.com/VkljFxs.png" alt="" /></li>
+    </ul>
+  </li>
+  <li>Tips:
+    <ul>
+      <li>Target Network
+   <img src="https://i.imgur.com/bbimeav.png" alt="" /></li>
+      <li>Exploration
+        <ul>
+          <li>原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data</li>
+          <li>解法：
+            <ul>
+              <li>Epsilon Greedy: <img src="https://i.imgur.com/dzvQtq3.png" alt="" /></li>
+              <li>Boltzmann Exploration</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Replay Buffer
+  <img src="https://i.imgur.com/QLBWaPY.jpg" alt="" />
+        <ul>
+          <li>減少和環境互動的次數</li>
+          <li>可提升 batch data diversity</li>
+          <li>Off-policy: 因為過去的 exp 不一定來自 \(\pi\)</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Advanced Tips
+    <ul>
+      <li>Double DQN
+        <ul>
+          <li>問題：DQN 會高估 Q value
+            <ul>
+              <li>估計誤差 \(\rightarrow\) 選到高估的 action \(\rightarrow\) target值會被設太高</li>
+            </ul>
+          </li>
+          <li>解法：選 action 的 Q function \(\neq\) 算 Q value 的 Q function
+            <ul>
+              <li><img src="https://i.imgur.com/7KlxIx9.png" alt="" /></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Dueling DQN
+        <ul>
+          <li>改變 network 架構，\(Q(s, a)\rightarrow Q(s, a)=V(s)+A(s, a)\)</li>
+          <li>提升估計 Q value 的效率，不用每個 pair 都被 sample</li>
+          <li><img src="https://i.imgur.com/z1WzTyg.jpg" alt="" /></li>
+          <li>\(\because\) 更新 \(V(s)\) 比 sample 有效率</li>
+          <li>A 的 column 合為 0，確保更新 V</li>
+        </ul>
+      </li>
+      <li>Priority Reply
+        <ul>
+          <li>從 buffer 裡選擇 TD error 較大的 experience set</li>
+          <li>改變 sample data 的 distribution &amp; training process</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/24/dqn.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

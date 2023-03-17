@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>VPC/Route 53 config &amp; Nginx + EC2 最簡單的 EC2 實作🫠 | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="VPC/Route 53 config &amp; Nginx + EC2 最簡單的 EC2 實作🫠" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠） Homework 基本要求 VPC 建出來要有 Subnet / Route Table Route 53 要設定出 sub-domain 要有幾筆 CNAME / A 其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。 HW - record Create VPC Route table 新增路由連到外網： Main route table → Routes → Edit Routes Destination: 0.0.0.0/0 , Target: igw-XXXX Create EC2 Day4：Amazon Elastic Cloud Compute(EC2) 【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet Setup Route53 Day11：Amazon Route 53 Amplify: 以視覺方式建置 Web 前端 UI Deploy your Jekyll Site using AWS Amplify — with only a few clicks Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain 問題 CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns） Name server 用處：讓其他人得以 query 到我們自己設定的 dns record Nginx in EC2 Prerequisite: EC2 w/ SG allowing http &amp; https Nginx Config 在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡 下載 nginx &amp; epel sudo yum install -y epel-release sudo yum install nginx -y Nginx 相關指令 sudo systemctl start nginx sudo systemctl enable nginx sudo systemctl status nginx 建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面 sudo mkdir /var/www/jc713.staff.5xruby.dev/public_html 改變該資料夾的所有權，讓 Nginx 可以存取執行 sudo chown -R nginx: /var/www/jc713.staff.5xruby.dev/ Enable SELinux: sudo vim /etc/selinux/config 將 disable 改成 enable &amp; check sudo sestatus 開放 SELinux 存取 Nginx website files sudo setsebool -P httpd_can_network_connect on sudo chcon -Rt httpd_sys_content_t /var/www/ Nginx 設定檔 sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf server { listen 80; listen [::]:80; root /var/www/example-one.com/public_html; index index.html; server_name example-one.com www.example-one.com; access_log /var/log/nginx/example-one.com.access.log; error_log /var/log/nginx/example-one.com.error.log; location / { try_files $uri $uri/ =404; } } 驗證 Nginx 設定 $ sudo nginx -t nginx: the configuration file /etc/nginx/nginx.conf syntax is ok nginx: configuration file /etc/nginx/nginx.conf test is successful Restart Nginx with sudo systemctl restart nginx Nginx SSL settings 安裝 Certbot sudo apt install certbot -y sudo apt-get install -y python-certbot-nginx 生成 SSL 憑證 &amp; Nginx 設定 $ sudo certbot --nginx ------- 1. You site admin email address 2. Terms of Service agreement. 3. List of domains you need HTTPS for. Certbot will automatically detect this information from the Nginx conf files. 4. HTTP to HTTPS redirection confirmation (it is better to redirect) Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊 listen [::]:443 ssl ipv6only=on; # managed by Certbot listen 443 ssl; # managed by Certbot ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem; # managed by Certbot ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem; # managed by Certbot include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot } Done! Reference Ref 1 Ref 2" />
+<meta property="og:description" content="最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠） Homework 基本要求 VPC 建出來要有 Subnet / Route Table Route 53 要設定出 sub-domain 要有幾筆 CNAME / A 其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。 HW - record Create VPC Route table 新增路由連到外網： Main route table → Routes → Edit Routes Destination: 0.0.0.0/0 , Target: igw-XXXX Create EC2 Day4：Amazon Elastic Cloud Compute(EC2) 【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet Setup Route53 Day11：Amazon Route 53 Amplify: 以視覺方式建置 Web 前端 UI Deploy your Jekyll Site using AWS Amplify — with only a few clicks Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain 問題 CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns） Name server 用處：讓其他人得以 query 到我們自己設定的 dns record Nginx in EC2 Prerequisite: EC2 w/ SG allowing http &amp; https Nginx Config 在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡 下載 nginx &amp; epel sudo yum install -y epel-release sudo yum install nginx -y Nginx 相關指令 sudo systemctl start nginx sudo systemctl enable nginx sudo systemctl status nginx 建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面 sudo mkdir /var/www/jc713.staff.5xruby.dev/public_html 改變該資料夾的所有權，讓 Nginx 可以存取執行 sudo chown -R nginx: /var/www/jc713.staff.5xruby.dev/ Enable SELinux: sudo vim /etc/selinux/config 將 disable 改成 enable &amp; check sudo sestatus 開放 SELinux 存取 Nginx website files sudo setsebool -P httpd_can_network_connect on sudo chcon -Rt httpd_sys_content_t /var/www/ Nginx 設定檔 sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf server { listen 80; listen [::]:80; root /var/www/example-one.com/public_html; index index.html; server_name example-one.com www.example-one.com; access_log /var/log/nginx/example-one.com.access.log; error_log /var/log/nginx/example-one.com.error.log; location / { try_files $uri $uri/ =404; } } 驗證 Nginx 設定 $ sudo nginx -t nginx: the configuration file /etc/nginx/nginx.conf syntax is ok nginx: configuration file /etc/nginx/nginx.conf test is successful Restart Nginx with sudo systemctl restart nginx Nginx SSL settings 安裝 Certbot sudo apt install certbot -y sudo apt-get install -y python-certbot-nginx 生成 SSL 憑證 &amp; Nginx 設定 $ sudo certbot --nginx ------- 1. You site admin email address 2. Terms of Service agreement. 3. List of domains you need HTTPS for. Certbot will automatically detect this information from the Nginx conf files. 4. HTTP to HTTPS redirection confirmation (it is better to redirect) Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊 listen [::]:443 ssl ipv6only=on; # managed by Certbot listen 443 ssl; # managed by Certbot ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem; # managed by Certbot ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem; # managed by Certbot include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot } Done! Reference Ref 1 Ref 2" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/05/16/aws-ec2.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/05/16/aws-ec2.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-05-16T13:52:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="VPC/Route 53 config &amp; Nginx + EC2 最簡單的 EC2 實作🫠" />
+<script type="application/ld+json">
+{"description":"最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠） Homework 基本要求 VPC 建出來要有 Subnet / Route Table Route 53 要設定出 sub-domain 要有幾筆 CNAME / A 其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。 HW - record Create VPC Route table 新增路由連到外網： Main route table → Routes → Edit Routes Destination: 0.0.0.0/0 , Target: igw-XXXX Create EC2 Day4：Amazon Elastic Cloud Compute(EC2) 【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet Setup Route53 Day11：Amazon Route 53 Amplify: 以視覺方式建置 Web 前端 UI Deploy your Jekyll Site using AWS Amplify — with only a few clicks Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain 問題 CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns） Name server 用處：讓其他人得以 query 到我們自己設定的 dns record Nginx in EC2 Prerequisite: EC2 w/ SG allowing http &amp; https Nginx Config 在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡 下載 nginx &amp; epel sudo yum install -y epel-release sudo yum install nginx -y Nginx 相關指令 sudo systemctl start nginx sudo systemctl enable nginx sudo systemctl status nginx 建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面 sudo mkdir /var/www/jc713.staff.5xruby.dev/public_html 改變該資料夾的所有權，讓 Nginx 可以存取執行 sudo chown -R nginx: /var/www/jc713.staff.5xruby.dev/ Enable SELinux: sudo vim /etc/selinux/config 將 disable 改成 enable &amp; check sudo sestatus 開放 SELinux 存取 Nginx website files sudo setsebool -P httpd_can_network_connect on sudo chcon -Rt httpd_sys_content_t /var/www/ Nginx 設定檔 sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf server { listen 80; listen [::]:80; root /var/www/example-one.com/public_html; index index.html; server_name example-one.com www.example-one.com; access_log /var/log/nginx/example-one.com.access.log; error_log /var/log/nginx/example-one.com.error.log; location / { try_files $uri $uri/ =404; } } 驗證 Nginx 設定 $ sudo nginx -t nginx: the configuration file /etc/nginx/nginx.conf syntax is ok nginx: configuration file /etc/nginx/nginx.conf test is successful Restart Nginx with sudo systemctl restart nginx Nginx SSL settings 安裝 Certbot sudo apt install certbot -y sudo apt-get install -y python-certbot-nginx 生成 SSL 憑證 &amp; Nginx 設定 $ sudo certbot --nginx ------- 1. You site admin email address 2. Terms of Service agreement. 3. List of domains you need HTTPS for. Certbot will automatically detect this information from the Nginx conf files. 4. HTTP to HTTPS redirection confirmation (it is better to redirect) Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊 listen [::]:443 ssl ipv6only=on; # managed by Certbot listen 443 ssl; # managed by Certbot ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem; # managed by Certbot ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem; # managed by Certbot include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot } Done! Reference Ref 1 Ref 2","url":"https://jqlynchien713.github.io/2022/05/16/aws-ec2.html","headline":"VPC/Route 53 config &amp; Nginx + EC2 最簡單的 EC2 實作🫠","@type":"BlogPosting","dateModified":"2022-05-16T13:52:00+00:00","datePublished":"2022-05-16T13:52:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/05/16/aws-ec2.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">VPC/Route 53 config &amp; Nginx + EC2 最簡單的 EC2 實作🫠</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-05-16T13:52:00+00:00" itemprop="datePublished">May 16, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 9 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#homework">Homework</a><ul><li><a href="#hw---record">HW - record</a></li><li><a href="#問題">問題</a></li></ul></li><li><a href="#nginx-in-ec2">Nginx in EC2</a><ul><li><a href="#nginx-config">Nginx Config</a></li><li><a href="#nginx-ssl-settings">Nginx SSL settings</a></li></ul></li></ul></div>
+    <p>最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠）</p>
+
+<h2 id="homework">Homework</h2>
+<p>基本要求</p>
+<ul>
+  <li>VPC 建出來要有 Subnet / Route Table</li>
+  <li>Route 53 要設定出 sub-domain 要有幾筆 CNAME / A</li>
+</ul>
+
+<p>其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。</p>
+
+<h3 id="hw---record">HW - record</h3>
+
+<ol>
+  <li>Create VPC
+    <ul>
+      <li>Route table 新增路由連到外網：
+        <ul>
+          <li>Main route table → Routes → Edit Routes</li>
+          <li>Destination: 0.0.0.0/0 , Target: igw-XXXX</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Create EC2
+    <ol>
+      <li><a href="https://ithelp.ithome.com.tw/articles/10233669">Day4：Amazon Elastic Cloud Compute(EC2)</a></li>
+      <li><a href="https://www.kx.com.tw/aws-usecase-VPC/">【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet</a></li>
+    </ol>
+  </li>
+  <li>Setup Route53
+    <ol>
+      <li><a href="https://ithelp.ithome.com.tw/articles/10234138">Day11：Amazon Route 53</a></li>
+    </ol>
+  </li>
+  <li>Amplify: 以視覺方式建置 Web 前端 UI
+    <ol>
+      <li><a href="https://medium.com/@jameshamann/deploy-your-jekyll-site-using-aws-amplify-with-only-a-few-clicks-8f3dd8f26112">Deploy your Jekyll Site using AWS Amplify — with only a few clicks</a></li>
+      <li>Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain</li>
+    </ol>
+  </li>
+</ol>
+
+<h3 id="問題">問題</h3>
+
+<ol>
+  <li>CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns）</li>
+  <li>Name server 用處：讓其他人得以 query 到我們自己設定的 dns record</li>
+</ol>
+
+<h2 id="nginx-in-ec2">Nginx in EC2</h2>
+
+<blockquote>
+  <p>Prerequisite: EC2 w/ SG allowing http &amp; https</p>
+
+</blockquote>
+
+<h3 id="nginx-config">Nginx Config</h3>
+<p>在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡</p>
+
+<ol>
+  <li>
+    <p>下載 nginx &amp; epel</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>yum <span class="nb">install</span> <span class="nt">-y</span> epel-release
+ <span class="nb">sudo </span>yum <span class="nb">install </span>nginx <span class="nt">-y</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Nginx 相關指令</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>systemctl start nginx
+ <span class="nb">sudo </span>systemctl <span class="nb">enable </span>nginx
+ <span class="nb">sudo </span>systemctl status nginx
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo mkdir</span> /var/www/jc713.staff.5xruby.dev/public_html
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>改變該資料夾的所有權，讓 Nginx 可以存取執行</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo chown</span> <span class="nt">-R</span> nginx: /var/www/jc713.staff.5xruby.dev/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Enable SELinux: <code class="language-plaintext highlighter-rouge">sudo vim /etc/selinux/config</code> 將 disable 改成 enable</p>
+
+    <p>&amp; check <code class="language-plaintext highlighter-rouge">sudo sestatus</code></p>
+  </li>
+  <li>
+    <p>開放 SELinux 存取 Nginx website files</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>setsebool <span class="nt">-P</span> httpd_can_network_connect on
+ <span class="nb">sudo chcon</span> <span class="nt">-Rt</span> httpd_sys_content_t /var/www/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Nginx 設定檔 <code class="language-plaintext highlighter-rouge">sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf</code></p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> server <span class="o">{</span>
+     listen 80<span class="p">;</span>
+     listen <span class="o">[</span>::]:80<span class="p">;</span>
+
+     root /var/www/example-one.com/public_html<span class="p">;</span>
+
+     index index.html<span class="p">;</span>
+
+     server_name example-one.com www.example-one.com<span class="p">;</span>
+
+     access_log /var/log/nginx/example-one.com.access.log<span class="p">;</span>
+     error_log /var/log/nginx/example-one.com.error.log<span class="p">;</span>
+
+     location / <span class="o">{</span>
+         try_files <span class="nv">$uri</span> <span class="nv">$uri</span>/ <span class="o">=</span>404<span class="p">;</span>
+     <span class="o">}</span>
+ <span class="o">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>驗證 Nginx 設定</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nv">$ </span><span class="nb">sudo </span>nginx <span class="nt">-t</span>
+ nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+ nginx: configuration file /etc/nginx/nginx.conf <span class="nb">test </span>is successful
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Restart Nginx with <code class="language-plaintext highlighter-rouge">sudo systemctl restart nginx</code></p>
+  </li>
+</ol>
+
+<h3 id="nginx-ssl-settings">Nginx SSL settings</h3>
+
+<ol>
+  <li>
+    <p>安裝 Certbot</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>apt <span class="nb">install </span>certbot <span class="nt">-y</span>
+ <span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> python-certbot-nginx
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>生成 SSL 憑證 &amp; Nginx 設定</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nv">$ </span><span class="nb">sudo </span>certbot <span class="nt">--nginx</span>
+ <span class="nt">-------</span>
+ 1. You site admin email address
+ 2. Terms of Service agreement.
+ 3. List of domains you need HTTPS <span class="k">for</span><span class="nb">.</span> Certbot will automatically detect this information from the Nginx conf files.
+ 4. HTTP to HTTPS redirection confirmation <span class="o">(</span>it is better to redirect<span class="o">)</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> listen <span class="o">[</span>::]:443 ssl <span class="nv">ipv6only</span><span class="o">=</span>on<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     listen 443 ssl<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     include /etc/letsencrypt/options-ssl-nginx.conf<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+ <span class="o">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Done!</p>
+  </li>
+</ol>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://comtechies.com/how-to-install-and-configure-nginx-on-amazon-ec2-rhel-and-ubuntu-instances.html">Ref 1</a></li>
+  <li><a href="https://comtechies.com/nginx-letsencrypt-setup-guide-certbot.html">Ref 2</a></li>
+</ul>
+
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/05/16/aws-ec2.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

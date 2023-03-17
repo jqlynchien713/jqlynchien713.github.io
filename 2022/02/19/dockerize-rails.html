@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Dockerize Rails App | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="Dockerize Rails App" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="終於補到這篇了！需要 Dockerize 的原因很簡單，因為本地環境被我自己搞爆了😀 簡單來說就是我七八月時開發的專案，隔了四個月之後再回來繼續支援時，發現整個環境出一堆問題（基本上都是 M1 chips 相關的），不管怎麼改環境設定，下完指令之後永遠都會 crash，修到最後我也懶得繼續找原因了，想說剛學過 Docker，其他資深的同事們也有這樣搞過，就想說不然我也來試試看吧：） 這個專案用的 Ruby 版本是 2.6.9（所以才會在 M1 的電腦上充滿問題，最一開始在安裝 2.6.9 版的 Ruby 時就已經動過一些手腳了：在 make binary 出問題的話可以先下 CFLAGS=&quot;-Wno-error=implicit-function-declaration&quot; rvm install x.x.x 再安裝 by 老闆）還會需要用到 Redis, PostgresQL(DB), Webpacker，就都是一些開發 Rails 時所需最基本的配置，並在容器化後使用 docker-compose 來協調這些配置。 Docker-compose 簡介 根據官網的介紹，docker-compose 是一個用於管理、執行多容器 Docker Application 的工具。使用 docker-compose 時需要用 YAML 檔來定義 application 的各個 services，接下來即可透過一個指令、從配置中創建並啟動所有服務。這樣做的好處是可以同時定義、協調所有服務，可以避免在個別開啟容器時還要做額外的設定，提高開發的效率。 基本上在設定 docker-compose 時，需要先有各個 service container 要用的 image，不論是自己寫的 Dockerfile，或者是從 docker hub 上 pull 下來的 image 都可以。接下來就是 docker-compose.yml 的撰寫，需要先對整個應用程式做全域的設定（如使用的 docker-compose 版本、要有哪些 networks 等），接著再對個別的 services 做細節設定（選用哪裡的 image、port mapping、專案的環境變數…等） Docker-compose Configurations 在 docker-compose.yml 的開頭需要先對整個 application 做最基本的設定，但因為這邊只是開發環境而已，因此就只有簡單做 Networks &amp; Volumes 的設定而已，主要就是開兩個 Networks(development &amp; test) 與四個 Volumes(db_data, gem_cache, shared_data &amp; packs)。 Basic Setups Version: 指定要使用的 docker-compose 版本，目前看到大多數的教學都是用第三版 Networks: 在建起 application 之後，docker-compose 會把所有容器都丟到一個 default network 中，而在同個 network 裡的容器都互相 reachable。如果不想使用預設的 default network 的話也能自己另外宣告，並創造更複雜的 network topology。基本上可以透過這樣的設定達到區隔環境的效果，這也是為什麼這個專案的 networks 設置要分成 development 與 test 的原因 Volumes: 統一宣告所有 images 會用到的 volumes，因為有些 services 可能會需要共用 volumes(像是這個專案裡的 shared_data volume 就是拿來讓所有 containers 共用的 volume)。主要的功用是在開發的時候可以同步將本地端修改的內容，mapping 到容器裡的專案，在開發上比較節省時間。 Mapping 的格式： 外界:容器 Services Configurations 跟上面提到的配置一樣，再加上需要測試用的環境之後，我們在 docker-compose 裡總共會需要以下五個服務: redis, db(postgres), app, test, webpacker Redis Docker-compose service 設定 image: 可以直接選用 docker hub 上的 redis image command: 當這個服務開始運行時要執行的指令，aka 執行 redis server 的指令 redis-server networks: 這邊因為開發與測試環境都會用到 redis，所以兩個 network 都要放進來 volumes: 這邊只需要 shared_data AppName_redis: image: redis:6.0-alpine command: redis-server networks: - development - test volumes: - shared_data:/var/shared/redis Rails App 設定 需要將 app 內設定的 redis url 改成 docker-compose 裡指定的 service name 格式：&quot;redis://AppName_redis:6379/1&quot; (development &amp; test 兩個環境下都需要改) Reference DB(PostgresQL) Docker-compose service 設定 image: 這邊也是直接選用 docker hub 上的 postgres container volumes: 除了所有 service 共用的 shared_data 外，還需要指定一個用來儲存資料庫資訊的 volume(db_data) networks: 這邊也是兩個環境都會需要 db，因此兩個 network 都需要放 environment: 用來設定這個 container 的環境變數，這邊需要設定的是資料庫的帳號密碼，而官方 image 預設的帳號為 postgres 密碼為 password；因為這邊只是測試環境，所以用預設的沒關係，但如果上 staging 或 production 這種正式的環境時，就需要另外用 CI 工具做設定。 ports: 做 port mapping 用，讓資料庫可以被外界讀取 AppName_db: image: postgres:14-alpine container_name: AppName_db volumes: - db_data:/var/lib/postgresql/data - shared_data:/var/shared networks: - development - test environment: POSTGRES_USER: postgres POSTGRES_PASSWORD: password ports: - 5432:5432 Rails App 設定：config/database.yml 需要將整個 app 要連結的 db 改成 docker-compose 上的 service，並且設定帳號密碼 host: AppName_db username: postgres -&gt; image default setting password: password -&gt; image default setting 開啟整個服務後要記得先下 bundle exec rake db:create 來創建會用到的 db，否則資料庫的內容會長在一個很奇怪的位置，後續如果要用 rake 的指令操作資料庫會沒辦法讀取到正確的資料 App Dockerfile for Rails App 2 base images node:14-alpine, ruby:2.6.9-alpine: 這邊會用到兩層 base image 是因為專案裡的 node 版本是 14，不過如果只用 apk add 去下載 node 的話都會載到最新的 16 版，因此最後決定載兩層 base image，並且把帶 14 版的設定複製到 ruby image 裡，node 的部分就能正常運作了 Env variables Copy entrypoint scripts and grant execution permission Copy everything from node image Install all dependencies(not including node) 這邊要避開下載 node，以免把 14 版的設定覆蓋掉 FROM node:14-alpine as node RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine ENV APP_PATH /var/app ENV BUNDLE_VERSION 2.2.33 ENV BUNDLE_PATH /usr/local/bundle/gems ENV TMP_PATH /tmp/ ENV RAILS_LOG_TO_STDOUT true ENV RAILS_PORT 3000 # copy entrypoint scripts and grant execution permissions COPY ./dev-docker-entrypoint.sh /usr/local/bin/dev-entrypoint.sh COPY ./test-docker-entrypoint.sh /usr/local/bin/test-entrypoint.sh COPY --from=node . . RUN chmod +x /usr/local/bin/dev-entrypoint.sh &amp;&amp; chmod +x /usr/local/bin/test-entrypoint.sh # install dependencies for application RUN apk -U add --no-cache \ build-base \ git \ postgresql-dev \ postgresql-client \ libxml2-dev \ libidn-dev \ libxslt-dev \ yarn \ imagemagick6 \ imagemagick6-c++ \ imagemagick6-dev \ imagemagick6-libs \ tzdata \ less \ curl \ bash \ &amp;&amp; rm -rf /var/cache/apk/* \ &amp;&amp; mkdir -p $APP_PATH RUN gem install bundler --version &quot;$BUNDLE_VERSION&quot; \ &amp;&amp; rm -rf $GEM_HOME/cache/* RUN yarn install --check-file # navigate to app directory WORKDIR $APP_PATH EXPOSE $RAILS_PORT ENTRYPOINT [ &quot;bundle&quot;, &quot;exec&quot; ] Docker-compose service 設定 image: 使用上述的 Dockerfile 建出的 image，跟上面幾個服務不一樣，要使用 build 來指定建立 image 的資料夾還有 Dockerfile 的位置 volumes: 除了共用的 shared_data 外，還有整個專案的 mapping，需要對應到剛剛 Dockerfile 裡定義的 $APP_PATH 上，藉由 Docker bind mounts 達到 hot reloading 的效果；另外還有 gem_cache 的 volume，讓 dependencies 可以被清理和重建而不會干擾 app 的其他部分 stdin_open: 讓容器的標準輸入保持打開 tty: 將 Docker 分配一個虛擬終端（pseudo-tty）並綁定到容器的標準輸入上，讓我們可以使用 byebug 來進行 debug entrypoint: 設定當對 docker-compose 裡的 container 下指令時的進入點 command: 當啟動容器後要執行的指令 env_file: 環境設定檔 environment: 環境變數，可以被寫在環境設定檔裡，這邊會分開寫是因為公司的專案裡已經有預設的環境設定檔了，為了不洗掉原本的設定才另外寫在這個項目下。 depends_on: 開啟這個服務前需要其他哪些服務的支援 AppName_app: build: context: . dockerfile: Dockerfile.dev container_name: AppName_app volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - development ports: - 3000:3000 stdin_open: true tty: true entrypoint: dev-entrypoint.sh command: - rails server -p 3000 -b 0.0.0.0 env_file: .env.example environment: RAILS_ENV: development WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker ActionMailer 相關設定 如果會用到 ActionMailer 的話需要把 default_url_options 改成 docker-compose 上指定的 ip address，config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } Test Docker-compose service 設定 image: 同樣使用 app 的 image volumes: 與 app 的設定相同 AppName_test: image: AppName_AppName_app container_name: AppName_test volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - test ports: - 3001:3000 stdin_open: true tty: true entrypoint: test-entrypoint.sh command: [&quot;rails&quot;, &quot;-v&quot;] environment: RAILS_ENV: test WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker 注意事項 test service 在建立完之後本來就會死掉 執行測試：docker-compose run --rm AppName_test rspec Webpacker 最後就是被搞得半死ㄉ webpacker 了！終於要結束了！！！😀🔪 Rails App’s Webpack settings: config/webpacker.yml 基本上就是需要把 webpacker 設定成 docker-compose 裡配置的 webpacker 路徑 dev_server: host: webpacker (→ webpacker container name) public: 0.0.0.0:3035 (→ 0.0.0.0 為 rails host) Webpack container settings: 使用與 rails app container 相同的 Dockerfile、相同的 volume Node.js 設定 v14： Dockerfile.dev: 用兩層 base image FROM node:14-alpine as node 下載 python2 RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine 把 node 那邊的設定複製過來：COPY --from=node . . 要先執行 yarn install 等指令，生成 lock file Heap out of memory error: ref Set environment variable: - NODE_OPTIONS=--max_old_space_size=4096 webpacker: build: context: . dockerfile: Dockerfile.dev command: ruby bin/webpack-dev-server volumes: - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems - .:/var/app environment: - NODE_OPTIONS=--max_old_space_size=4096 - NODE_ENV=development - RAILS_ENV=development - WEBPACKER_DEV_SERVER_HOST=0.0.0.0 ports: - &quot;3035:3035&quot; networks: - development 所有改動過的檔案列表 config/cable.yml: url: &quot;redis://AppName_redis:6379/1&quot; config/database.yml: host: AppName_db(db service name) username: postgres password: postgres database: postgres config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } config/settings.yml: host: localhost:3000 config/webpacker.yml: host: webpacker public: 0.0.0.0:3035 好ㄌ….大概就是這樣，寫這篇真的豪累，但是寫 k8s 那兩篇好像會更累🥲？（哭ㄌ Reference Dockerfile base: Rails 6 development with Docker and Docker Compose Webpacker container: rails開發環境容器化實戰指南" />
+<meta property="og:description" content="終於補到這篇了！需要 Dockerize 的原因很簡單，因為本地環境被我自己搞爆了😀 簡單來說就是我七八月時開發的專案，隔了四個月之後再回來繼續支援時，發現整個環境出一堆問題（基本上都是 M1 chips 相關的），不管怎麼改環境設定，下完指令之後永遠都會 crash，修到最後我也懶得繼續找原因了，想說剛學過 Docker，其他資深的同事們也有這樣搞過，就想說不然我也來試試看吧：） 這個專案用的 Ruby 版本是 2.6.9（所以才會在 M1 的電腦上充滿問題，最一開始在安裝 2.6.9 版的 Ruby 時就已經動過一些手腳了：在 make binary 出問題的話可以先下 CFLAGS=&quot;-Wno-error=implicit-function-declaration&quot; rvm install x.x.x 再安裝 by 老闆）還會需要用到 Redis, PostgresQL(DB), Webpacker，就都是一些開發 Rails 時所需最基本的配置，並在容器化後使用 docker-compose 來協調這些配置。 Docker-compose 簡介 根據官網的介紹，docker-compose 是一個用於管理、執行多容器 Docker Application 的工具。使用 docker-compose 時需要用 YAML 檔來定義 application 的各個 services，接下來即可透過一個指令、從配置中創建並啟動所有服務。這樣做的好處是可以同時定義、協調所有服務，可以避免在個別開啟容器時還要做額外的設定，提高開發的效率。 基本上在設定 docker-compose 時，需要先有各個 service container 要用的 image，不論是自己寫的 Dockerfile，或者是從 docker hub 上 pull 下來的 image 都可以。接下來就是 docker-compose.yml 的撰寫，需要先對整個應用程式做全域的設定（如使用的 docker-compose 版本、要有哪些 networks 等），接著再對個別的 services 做細節設定（選用哪裡的 image、port mapping、專案的環境變數…等） Docker-compose Configurations 在 docker-compose.yml 的開頭需要先對整個 application 做最基本的設定，但因為這邊只是開發環境而已，因此就只有簡單做 Networks &amp; Volumes 的設定而已，主要就是開兩個 Networks(development &amp; test) 與四個 Volumes(db_data, gem_cache, shared_data &amp; packs)。 Basic Setups Version: 指定要使用的 docker-compose 版本，目前看到大多數的教學都是用第三版 Networks: 在建起 application 之後，docker-compose 會把所有容器都丟到一個 default network 中，而在同個 network 裡的容器都互相 reachable。如果不想使用預設的 default network 的話也能自己另外宣告，並創造更複雜的 network topology。基本上可以透過這樣的設定達到區隔環境的效果，這也是為什麼這個專案的 networks 設置要分成 development 與 test 的原因 Volumes: 統一宣告所有 images 會用到的 volumes，因為有些 services 可能會需要共用 volumes(像是這個專案裡的 shared_data volume 就是拿來讓所有 containers 共用的 volume)。主要的功用是在開發的時候可以同步將本地端修改的內容，mapping 到容器裡的專案，在開發上比較節省時間。 Mapping 的格式： 外界:容器 Services Configurations 跟上面提到的配置一樣，再加上需要測試用的環境之後，我們在 docker-compose 裡總共會需要以下五個服務: redis, db(postgres), app, test, webpacker Redis Docker-compose service 設定 image: 可以直接選用 docker hub 上的 redis image command: 當這個服務開始運行時要執行的指令，aka 執行 redis server 的指令 redis-server networks: 這邊因為開發與測試環境都會用到 redis，所以兩個 network 都要放進來 volumes: 這邊只需要 shared_data AppName_redis: image: redis:6.0-alpine command: redis-server networks: - development - test volumes: - shared_data:/var/shared/redis Rails App 設定 需要將 app 內設定的 redis url 改成 docker-compose 裡指定的 service name 格式：&quot;redis://AppName_redis:6379/1&quot; (development &amp; test 兩個環境下都需要改) Reference DB(PostgresQL) Docker-compose service 設定 image: 這邊也是直接選用 docker hub 上的 postgres container volumes: 除了所有 service 共用的 shared_data 外，還需要指定一個用來儲存資料庫資訊的 volume(db_data) networks: 這邊也是兩個環境都會需要 db，因此兩個 network 都需要放 environment: 用來設定這個 container 的環境變數，這邊需要設定的是資料庫的帳號密碼，而官方 image 預設的帳號為 postgres 密碼為 password；因為這邊只是測試環境，所以用預設的沒關係，但如果上 staging 或 production 這種正式的環境時，就需要另外用 CI 工具做設定。 ports: 做 port mapping 用，讓資料庫可以被外界讀取 AppName_db: image: postgres:14-alpine container_name: AppName_db volumes: - db_data:/var/lib/postgresql/data - shared_data:/var/shared networks: - development - test environment: POSTGRES_USER: postgres POSTGRES_PASSWORD: password ports: - 5432:5432 Rails App 設定：config/database.yml 需要將整個 app 要連結的 db 改成 docker-compose 上的 service，並且設定帳號密碼 host: AppName_db username: postgres -&gt; image default setting password: password -&gt; image default setting 開啟整個服務後要記得先下 bundle exec rake db:create 來創建會用到的 db，否則資料庫的內容會長在一個很奇怪的位置，後續如果要用 rake 的指令操作資料庫會沒辦法讀取到正確的資料 App Dockerfile for Rails App 2 base images node:14-alpine, ruby:2.6.9-alpine: 這邊會用到兩層 base image 是因為專案裡的 node 版本是 14，不過如果只用 apk add 去下載 node 的話都會載到最新的 16 版，因此最後決定載兩層 base image，並且把帶 14 版的設定複製到 ruby image 裡，node 的部分就能正常運作了 Env variables Copy entrypoint scripts and grant execution permission Copy everything from node image Install all dependencies(not including node) 這邊要避開下載 node，以免把 14 版的設定覆蓋掉 FROM node:14-alpine as node RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine ENV APP_PATH /var/app ENV BUNDLE_VERSION 2.2.33 ENV BUNDLE_PATH /usr/local/bundle/gems ENV TMP_PATH /tmp/ ENV RAILS_LOG_TO_STDOUT true ENV RAILS_PORT 3000 # copy entrypoint scripts and grant execution permissions COPY ./dev-docker-entrypoint.sh /usr/local/bin/dev-entrypoint.sh COPY ./test-docker-entrypoint.sh /usr/local/bin/test-entrypoint.sh COPY --from=node . . RUN chmod +x /usr/local/bin/dev-entrypoint.sh &amp;&amp; chmod +x /usr/local/bin/test-entrypoint.sh # install dependencies for application RUN apk -U add --no-cache \ build-base \ git \ postgresql-dev \ postgresql-client \ libxml2-dev \ libidn-dev \ libxslt-dev \ yarn \ imagemagick6 \ imagemagick6-c++ \ imagemagick6-dev \ imagemagick6-libs \ tzdata \ less \ curl \ bash \ &amp;&amp; rm -rf /var/cache/apk/* \ &amp;&amp; mkdir -p $APP_PATH RUN gem install bundler --version &quot;$BUNDLE_VERSION&quot; \ &amp;&amp; rm -rf $GEM_HOME/cache/* RUN yarn install --check-file # navigate to app directory WORKDIR $APP_PATH EXPOSE $RAILS_PORT ENTRYPOINT [ &quot;bundle&quot;, &quot;exec&quot; ] Docker-compose service 設定 image: 使用上述的 Dockerfile 建出的 image，跟上面幾個服務不一樣，要使用 build 來指定建立 image 的資料夾還有 Dockerfile 的位置 volumes: 除了共用的 shared_data 外，還有整個專案的 mapping，需要對應到剛剛 Dockerfile 裡定義的 $APP_PATH 上，藉由 Docker bind mounts 達到 hot reloading 的效果；另外還有 gem_cache 的 volume，讓 dependencies 可以被清理和重建而不會干擾 app 的其他部分 stdin_open: 讓容器的標準輸入保持打開 tty: 將 Docker 分配一個虛擬終端（pseudo-tty）並綁定到容器的標準輸入上，讓我們可以使用 byebug 來進行 debug entrypoint: 設定當對 docker-compose 裡的 container 下指令時的進入點 command: 當啟動容器後要執行的指令 env_file: 環境設定檔 environment: 環境變數，可以被寫在環境設定檔裡，這邊會分開寫是因為公司的專案裡已經有預設的環境設定檔了，為了不洗掉原本的設定才另外寫在這個項目下。 depends_on: 開啟這個服務前需要其他哪些服務的支援 AppName_app: build: context: . dockerfile: Dockerfile.dev container_name: AppName_app volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - development ports: - 3000:3000 stdin_open: true tty: true entrypoint: dev-entrypoint.sh command: - rails server -p 3000 -b 0.0.0.0 env_file: .env.example environment: RAILS_ENV: development WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker ActionMailer 相關設定 如果會用到 ActionMailer 的話需要把 default_url_options 改成 docker-compose 上指定的 ip address，config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } Test Docker-compose service 設定 image: 同樣使用 app 的 image volumes: 與 app 的設定相同 AppName_test: image: AppName_AppName_app container_name: AppName_test volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - test ports: - 3001:3000 stdin_open: true tty: true entrypoint: test-entrypoint.sh command: [&quot;rails&quot;, &quot;-v&quot;] environment: RAILS_ENV: test WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker 注意事項 test service 在建立完之後本來就會死掉 執行測試：docker-compose run --rm AppName_test rspec Webpacker 最後就是被搞得半死ㄉ webpacker 了！終於要結束了！！！😀🔪 Rails App’s Webpack settings: config/webpacker.yml 基本上就是需要把 webpacker 設定成 docker-compose 裡配置的 webpacker 路徑 dev_server: host: webpacker (→ webpacker container name) public: 0.0.0.0:3035 (→ 0.0.0.0 為 rails host) Webpack container settings: 使用與 rails app container 相同的 Dockerfile、相同的 volume Node.js 設定 v14： Dockerfile.dev: 用兩層 base image FROM node:14-alpine as node 下載 python2 RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine 把 node 那邊的設定複製過來：COPY --from=node . . 要先執行 yarn install 等指令，生成 lock file Heap out of memory error: ref Set environment variable: - NODE_OPTIONS=--max_old_space_size=4096 webpacker: build: context: . dockerfile: Dockerfile.dev command: ruby bin/webpack-dev-server volumes: - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems - .:/var/app environment: - NODE_OPTIONS=--max_old_space_size=4096 - NODE_ENV=development - RAILS_ENV=development - WEBPACKER_DEV_SERVER_HOST=0.0.0.0 ports: - &quot;3035:3035&quot; networks: - development 所有改動過的檔案列表 config/cable.yml: url: &quot;redis://AppName_redis:6379/1&quot; config/database.yml: host: AppName_db(db service name) username: postgres password: postgres database: postgres config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } config/settings.yml: host: localhost:3000 config/webpacker.yml: host: webpacker public: 0.0.0.0:3035 好ㄌ….大概就是這樣，寫這篇真的豪累，但是寫 k8s 那兩篇好像會更累🥲？（哭ㄌ Reference Dockerfile base: Rails 6 development with Docker and Docker Compose Webpacker container: rails開發環境容器化實戰指南" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/19/dockerize-rails.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/19/dockerize-rails.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-19T14:51:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Dockerize Rails App" />
+<script type="application/ld+json">
+{"description":"終於補到這篇了！需要 Dockerize 的原因很簡單，因為本地環境被我自己搞爆了😀 簡單來說就是我七八月時開發的專案，隔了四個月之後再回來繼續支援時，發現整個環境出一堆問題（基本上都是 M1 chips 相關的），不管怎麼改環境設定，下完指令之後永遠都會 crash，修到最後我也懶得繼續找原因了，想說剛學過 Docker，其他資深的同事們也有這樣搞過，就想說不然我也來試試看吧：） 這個專案用的 Ruby 版本是 2.6.9（所以才會在 M1 的電腦上充滿問題，最一開始在安裝 2.6.9 版的 Ruby 時就已經動過一些手腳了：在 make binary 出問題的話可以先下 CFLAGS=&quot;-Wno-error=implicit-function-declaration&quot; rvm install x.x.x 再安裝 by 老闆）還會需要用到 Redis, PostgresQL(DB), Webpacker，就都是一些開發 Rails 時所需最基本的配置，並在容器化後使用 docker-compose 來協調這些配置。 Docker-compose 簡介 根據官網的介紹，docker-compose 是一個用於管理、執行多容器 Docker Application 的工具。使用 docker-compose 時需要用 YAML 檔來定義 application 的各個 services，接下來即可透過一個指令、從配置中創建並啟動所有服務。這樣做的好處是可以同時定義、協調所有服務，可以避免在個別開啟容器時還要做額外的設定，提高開發的效率。 基本上在設定 docker-compose 時，需要先有各個 service container 要用的 image，不論是自己寫的 Dockerfile，或者是從 docker hub 上 pull 下來的 image 都可以。接下來就是 docker-compose.yml 的撰寫，需要先對整個應用程式做全域的設定（如使用的 docker-compose 版本、要有哪些 networks 等），接著再對個別的 services 做細節設定（選用哪裡的 image、port mapping、專案的環境變數…等） Docker-compose Configurations 在 docker-compose.yml 的開頭需要先對整個 application 做最基本的設定，但因為這邊只是開發環境而已，因此就只有簡單做 Networks &amp; Volumes 的設定而已，主要就是開兩個 Networks(development &amp; test) 與四個 Volumes(db_data, gem_cache, shared_data &amp; packs)。 Basic Setups Version: 指定要使用的 docker-compose 版本，目前看到大多數的教學都是用第三版 Networks: 在建起 application 之後，docker-compose 會把所有容器都丟到一個 default network 中，而在同個 network 裡的容器都互相 reachable。如果不想使用預設的 default network 的話也能自己另外宣告，並創造更複雜的 network topology。基本上可以透過這樣的設定達到區隔環境的效果，這也是為什麼這個專案的 networks 設置要分成 development 與 test 的原因 Volumes: 統一宣告所有 images 會用到的 volumes，因為有些 services 可能會需要共用 volumes(像是這個專案裡的 shared_data volume 就是拿來讓所有 containers 共用的 volume)。主要的功用是在開發的時候可以同步將本地端修改的內容，mapping 到容器裡的專案，在開發上比較節省時間。 Mapping 的格式： 外界:容器 Services Configurations 跟上面提到的配置一樣，再加上需要測試用的環境之後，我們在 docker-compose 裡總共會需要以下五個服務: redis, db(postgres), app, test, webpacker Redis Docker-compose service 設定 image: 可以直接選用 docker hub 上的 redis image command: 當這個服務開始運行時要執行的指令，aka 執行 redis server 的指令 redis-server networks: 這邊因為開發與測試環境都會用到 redis，所以兩個 network 都要放進來 volumes: 這邊只需要 shared_data AppName_redis: image: redis:6.0-alpine command: redis-server networks: - development - test volumes: - shared_data:/var/shared/redis Rails App 設定 需要將 app 內設定的 redis url 改成 docker-compose 裡指定的 service name 格式：&quot;redis://AppName_redis:6379/1&quot; (development &amp; test 兩個環境下都需要改) Reference DB(PostgresQL) Docker-compose service 設定 image: 這邊也是直接選用 docker hub 上的 postgres container volumes: 除了所有 service 共用的 shared_data 外，還需要指定一個用來儲存資料庫資訊的 volume(db_data) networks: 這邊也是兩個環境都會需要 db，因此兩個 network 都需要放 environment: 用來設定這個 container 的環境變數，這邊需要設定的是資料庫的帳號密碼，而官方 image 預設的帳號為 postgres 密碼為 password；因為這邊只是測試環境，所以用預設的沒關係，但如果上 staging 或 production 這種正式的環境時，就需要另外用 CI 工具做設定。 ports: 做 port mapping 用，讓資料庫可以被外界讀取 AppName_db: image: postgres:14-alpine container_name: AppName_db volumes: - db_data:/var/lib/postgresql/data - shared_data:/var/shared networks: - development - test environment: POSTGRES_USER: postgres POSTGRES_PASSWORD: password ports: - 5432:5432 Rails App 設定：config/database.yml 需要將整個 app 要連結的 db 改成 docker-compose 上的 service，並且設定帳號密碼 host: AppName_db username: postgres -&gt; image default setting password: password -&gt; image default setting 開啟整個服務後要記得先下 bundle exec rake db:create 來創建會用到的 db，否則資料庫的內容會長在一個很奇怪的位置，後續如果要用 rake 的指令操作資料庫會沒辦法讀取到正確的資料 App Dockerfile for Rails App 2 base images node:14-alpine, ruby:2.6.9-alpine: 這邊會用到兩層 base image 是因為專案裡的 node 版本是 14，不過如果只用 apk add 去下載 node 的話都會載到最新的 16 版，因此最後決定載兩層 base image，並且把帶 14 版的設定複製到 ruby image 裡，node 的部分就能正常運作了 Env variables Copy entrypoint scripts and grant execution permission Copy everything from node image Install all dependencies(not including node) 這邊要避開下載 node，以免把 14 版的設定覆蓋掉 FROM node:14-alpine as node RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine ENV APP_PATH /var/app ENV BUNDLE_VERSION 2.2.33 ENV BUNDLE_PATH /usr/local/bundle/gems ENV TMP_PATH /tmp/ ENV RAILS_LOG_TO_STDOUT true ENV RAILS_PORT 3000 # copy entrypoint scripts and grant execution permissions COPY ./dev-docker-entrypoint.sh /usr/local/bin/dev-entrypoint.sh COPY ./test-docker-entrypoint.sh /usr/local/bin/test-entrypoint.sh COPY --from=node . . RUN chmod +x /usr/local/bin/dev-entrypoint.sh &amp;&amp; chmod +x /usr/local/bin/test-entrypoint.sh # install dependencies for application RUN apk -U add --no-cache \\ build-base \\ git \\ postgresql-dev \\ postgresql-client \\ libxml2-dev \\ libidn-dev \\ libxslt-dev \\ yarn \\ imagemagick6 \\ imagemagick6-c++ \\ imagemagick6-dev \\ imagemagick6-libs \\ tzdata \\ less \\ curl \\ bash \\ &amp;&amp; rm -rf /var/cache/apk/* \\ &amp;&amp; mkdir -p $APP_PATH RUN gem install bundler --version &quot;$BUNDLE_VERSION&quot; \\ &amp;&amp; rm -rf $GEM_HOME/cache/* RUN yarn install --check-file # navigate to app directory WORKDIR $APP_PATH EXPOSE $RAILS_PORT ENTRYPOINT [ &quot;bundle&quot;, &quot;exec&quot; ] Docker-compose service 設定 image: 使用上述的 Dockerfile 建出的 image，跟上面幾個服務不一樣，要使用 build 來指定建立 image 的資料夾還有 Dockerfile 的位置 volumes: 除了共用的 shared_data 外，還有整個專案的 mapping，需要對應到剛剛 Dockerfile 裡定義的 $APP_PATH 上，藉由 Docker bind mounts 達到 hot reloading 的效果；另外還有 gem_cache 的 volume，讓 dependencies 可以被清理和重建而不會干擾 app 的其他部分 stdin_open: 讓容器的標準輸入保持打開 tty: 將 Docker 分配一個虛擬終端（pseudo-tty）並綁定到容器的標準輸入上，讓我們可以使用 byebug 來進行 debug entrypoint: 設定當對 docker-compose 裡的 container 下指令時的進入點 command: 當啟動容器後要執行的指令 env_file: 環境設定檔 environment: 環境變數，可以被寫在環境設定檔裡，這邊會分開寫是因為公司的專案裡已經有預設的環境設定檔了，為了不洗掉原本的設定才另外寫在這個項目下。 depends_on: 開啟這個服務前需要其他哪些服務的支援 AppName_app: build: context: . dockerfile: Dockerfile.dev container_name: AppName_app volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - development ports: - 3000:3000 stdin_open: true tty: true entrypoint: dev-entrypoint.sh command: - rails server -p 3000 -b 0.0.0.0 env_file: .env.example environment: RAILS_ENV: development WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker ActionMailer 相關設定 如果會用到 ActionMailer 的話需要把 default_url_options 改成 docker-compose 上指定的 ip address，config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } Test Docker-compose service 設定 image: 同樣使用 app 的 image volumes: 與 app 的設定相同 AppName_test: image: AppName_AppName_app container_name: AppName_test volumes: - .:/var/app - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems networks: - test ports: - 3001:3000 stdin_open: true tty: true entrypoint: test-entrypoint.sh command: [&quot;rails&quot;, &quot;-v&quot;] environment: RAILS_ENV: test WEBPACKER_DEV_SERVER_HOST: webpacker depends_on: - AppName_db - webpacker 注意事項 test service 在建立完之後本來就會死掉 執行測試：docker-compose run --rm AppName_test rspec Webpacker 最後就是被搞得半死ㄉ webpacker 了！終於要結束了！！！😀🔪 Rails App’s Webpack settings: config/webpacker.yml 基本上就是需要把 webpacker 設定成 docker-compose 裡配置的 webpacker 路徑 dev_server: host: webpacker (→ webpacker container name) public: 0.0.0.0:3035 (→ 0.0.0.0 為 rails host) Webpack container settings: 使用與 rails app container 相同的 Dockerfile、相同的 volume Node.js 設定 v14： Dockerfile.dev: 用兩層 base image FROM node:14-alpine as node 下載 python2 RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python FROM ruby:2.6.9-alpine 把 node 那邊的設定複製過來：COPY --from=node . . 要先執行 yarn install 等指令，生成 lock file Heap out of memory error: ref Set environment variable: - NODE_OPTIONS=--max_old_space_size=4096 webpacker: build: context: . dockerfile: Dockerfile.dev command: ruby bin/webpack-dev-server volumes: - shared_data:/var/shared - gem_cache:/usr/local/bundle/gems - .:/var/app environment: - NODE_OPTIONS=--max_old_space_size=4096 - NODE_ENV=development - RAILS_ENV=development - WEBPACKER_DEV_SERVER_HOST=0.0.0.0 ports: - &quot;3035:3035&quot; networks: - development 所有改動過的檔案列表 config/cable.yml: url: &quot;redis://AppName_redis:6379/1&quot; config/database.yml: host: AppName_db(db service name) username: postgres password: postgres database: postgres config/environments/development.rb: config.action_mailer.default_url_options = { host: &#39;0.0.0.0:3000&#39; } config/settings.yml: host: localhost:3000 config/webpacker.yml: host: webpacker public: 0.0.0.0:3035 好ㄌ….大概就是這樣，寫這篇真的豪累，但是寫 k8s 那兩篇好像會更累🥲？（哭ㄌ Reference Dockerfile base: Rails 6 development with Docker and Docker Compose Webpacker container: rails開發環境容器化實戰指南","url":"https://jqlynchien713.github.io/2022/02/19/dockerize-rails.html","headline":"Dockerize Rails App","@type":"BlogPosting","dateModified":"2022-02-19T14:51:00+00:00","datePublished":"2022-02-19T14:51:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/19/dockerize-rails.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Dockerize Rails App</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-19T14:51:00+00:00" itemprop="datePublished">Feb 19, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 29 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">deploy</span>
+    
+      <span class="tag">docker-compose</span>
+    
+      <span class="tag">rails</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#docker-compose-簡介">Docker-compose 簡介</a></li><li><a href="#docker-compose-configurations">Docker-compose Configurations</a><ul><li><a href="#basic-setups">Basic Setups</a></li></ul></li><li><a href="#services-configurations">Services Configurations</a><ul><li><a href="#redis">Redis</a></li><li><a href="#dbpostgresql">DB(PostgresQL)</a></li><li><a href="#app">App</a></li><li><a href="#test">Test</a></li><li><a href="#webpacker">Webpacker</a></li></ul></li><li><a href="#所有改動過的檔案列表">所有改動過的檔案列表</a></li></ul></div>
+    <p>終於補到這篇了！需要 Dockerize 的原因很簡單，因為本地環境被我自己搞爆了😀 簡單來說就是我七八月時開發的專案，隔了四個月之後再回來繼續支援時，發現整個環境出一堆問題（基本上都是 M1 chips 相關的），不管怎麼改環境設定，下完指令之後永遠都會 crash，修到最後我也懶得繼續找原因了，想說剛學過 Docker，其他資深的同事們也有這樣搞過，就想說不然我也來試試看吧：）</p>
+
+<p>這個專案用的 Ruby 版本是 2.6.9（所以才會在 M1 的電腦上充滿問題，最一開始在安裝 2.6.9 版的 Ruby 時就已經動過一些手腳了：在 make binary 出問題的話可以先下 <code class="language-plaintext highlighter-rouge">CFLAGS="-Wno-error=implicit-function-declaration" rvm install x.x.x</code> 再安裝 by 老闆）還會需要用到 Redis, PostgresQL(DB), Webpacker，就都是一些開發 Rails 時所需最基本的配置，並在容器化後使用 docker-compose 來協調這些配置。</p>
+
+<h2 id="docker-compose-簡介">Docker-compose 簡介</h2>
+<p>根據官網的介紹，docker-compose 是一個用於管理、執行多容器 Docker Application 的工具。使用 docker-compose 時需要用 YAML 檔來定義 application 的各個 services，接下來即可透過一個指令、從配置中創建並啟動所有服務。這樣做的好處是可以同時定義、協調所有服務，可以避免在個別開啟容器時還要做額外的設定，提高開發的效率。</p>
+
+<p>基本上在設定 docker-compose 時，需要先有各個 service container 要用的 image，不論是自己寫的 Dockerfile，或者是從 docker hub 上 pull 下來的 image 都可以。接下來就是 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 的撰寫，需要先對整個應用程式做全域的設定（如使用的 docker-compose 版本、要有哪些 networks 等），接著再對個別的 services 做細節設定（選用哪裡的 image、port mapping、專案的環境變數…等）</p>
+
+<h2 id="docker-compose-configurations">Docker-compose Configurations</h2>
+<p>在 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 的開頭需要先對整個 application 做最基本的設定，但因為這邊只是開發環境而已，因此就只有簡單做 Networks &amp; Volumes 的設定而已，主要就是開兩個 Networks(<code class="language-plaintext highlighter-rouge">development</code> &amp; <code class="language-plaintext highlighter-rouge">test</code>) 與四個 Volumes(<code class="language-plaintext highlighter-rouge">db_data</code>, <code class="language-plaintext highlighter-rouge">gem_cache</code>, <code class="language-plaintext highlighter-rouge">shared_data</code> &amp; <code class="language-plaintext highlighter-rouge">packs</code>)。</p>
+
+<h3 id="basic-setups">Basic Setups</h3>
+<ul>
+  <li><ins>Version</ins>: 指定要使用的 docker-compose 版本，目前看到大多數的教學都是用第三版</li>
+  <li><ins>Networks</ins>: 在建起 application 之後，docker-compose 會把所有容器都丟到一個 default network 中，而在同個 network 裡的容器都互相 reachable。如果不想使用預設的 default network 的話也能自己另外宣告，並創造更複雜的 network topology。基本上可以透過這樣的設定達到區隔環境的效果，這也是為什麼這個專案的 networks 設置要分成 development 與 test 的原因</li>
+  <li><ins>Volumes</ins>: 統一宣告所有 images 會用到的 volumes，因為有些 services 可能會需要共用 volumes(像是這個專案裡的 <code class="language-plaintext highlighter-rouge">shared_data</code> volume 就是拿來讓所有 containers 共用的 volume)。主要的功用是在開發的時候可以同步將本地端修改的內容，mapping 到容器裡的專案，在開發上比較節省時間。
+    <blockquote>
+      <p>Mapping 的格式： <code class="language-plaintext highlighter-rouge">外界:容器</code></p>
+    </blockquote>
+  </li>
+</ul>
+
+<h2 id="services-configurations">Services Configurations</h2>
+<p>跟上面提到的配置一樣，再加上需要測試用的環境之後，我們在 docker-compose 裡總共會需要以下五個服務: <code class="language-plaintext highlighter-rouge">redis</code>, <code class="language-plaintext highlighter-rouge">db</code>(postgres), <code class="language-plaintext highlighter-rouge">app</code>, <code class="language-plaintext highlighter-rouge">test</code>, <code class="language-plaintext highlighter-rouge">webpacker</code></p>
+
+<h3 id="redis">Redis</h3>
+<ul>
+  <li>Docker-compose service 設定
+    <ul>
+      <li><ins>image</ins>: 可以直接選用 docker hub 上的 redis image</li>
+      <li><ins>command</ins>: 當這個服務開始運行時要執行的指令，aka 執行 redis server 的指令 <code class="language-plaintext highlighter-rouge">redis-server</code></li>
+      <li><ins>networks</ins>: 這邊因為開發與測試環境都會用到 redis，所以兩個 network 都要放進來</li>
+      <li><ins>volumes</ins>: 這邊只需要 <code class="language-plaintext highlighter-rouge">shared_data</code></li>
+    </ul>
+
+    <div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">AppName_redis</span><span class="pi">:</span>
+  <span class="na">image</span><span class="pi">:</span> <span class="s">redis:6.0-alpine</span>
+  <span class="na">command</span><span class="pi">:</span> <span class="s">redis-server</span>
+  <span class="na">networks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">development</span>
+    <span class="pi">-</span> <span class="s">test</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">shared_data:/var/shared/redis</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Rails App 設定
+    <ul>
+      <li>需要將 app 內設定的 redis url 改成 docker-compose 裡指定的 service name 格式：<code class="language-plaintext highlighter-rouge">"redis://AppName_redis:6379/1"</code> (development &amp; test 兩個環境下都需要改) <a href="https://stackoverflow.com/questions/34729752/sidekiq-error-connecting-to-redis-on-127-0-0-16379-errnoeconnrefused-on-doc">Reference</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="dbpostgresql">DB(PostgresQL)</h3>
+<ul>
+  <li>Docker-compose service 設定
+    <ul>
+      <li><ins>image</ins>: 這邊也是直接選用 docker hub 上的 postgres container</li>
+      <li><ins>volumes</ins>: 除了所有 service 共用的 <code class="language-plaintext highlighter-rouge">shared_data</code> 外，還需要指定一個用來儲存資料庫資訊的 volume(<code class="language-plaintext highlighter-rouge">db_data</code>)</li>
+      <li><ins>networks</ins>: 這邊也是兩個環境都會需要 db，因此兩個 network 都需要放</li>
+      <li><ins>environment</ins>: 用來設定這個 container 的環境變數，這邊需要設定的是資料庫的帳號密碼，而官方 image 預設的帳號為 <code class="language-plaintext highlighter-rouge">postgres</code> 密碼為 <code class="language-plaintext highlighter-rouge">password</code>；因為這邊只是測試環境，所以用預設的沒關係，但如果上 staging 或 production 這種正式的環境時，就需要另外用 CI 工具做設定。</li>
+      <li><ins>ports</ins>: 做 port mapping 用，讓資料庫可以被外界讀取</li>
+    </ul>
+
+    <div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">AppName_db</span><span class="pi">:</span>
+  <span class="na">image</span><span class="pi">:</span> <span class="s">postgres:14-alpine</span>
+  <span class="na">container_name</span><span class="pi">:</span> <span class="s">AppName_db</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">db_data:/var/lib/postgresql/data</span>
+    <span class="pi">-</span> <span class="s">shared_data:/var/shared</span>
+  <span class="na">networks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">development</span>
+    <span class="pi">-</span> <span class="s">test</span>
+  <span class="na">environment</span><span class="pi">:</span>
+    <span class="na">POSTGRES_USER</span><span class="pi">:</span> <span class="s">postgres</span>
+    <span class="na">POSTGRES_PASSWORD</span><span class="pi">:</span> <span class="s">password</span>
+  <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">5432:5432</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Rails App 設定：<code class="language-plaintext highlighter-rouge">config/database.yml</code>
+    <ul>
+      <li>需要將整個 app 要連結的 db 改成 docker-compose 上的 service，並且設定帳號密碼</li>
+      <li>host: <code class="language-plaintext highlighter-rouge">AppName_db</code></li>
+      <li>username: <code class="language-plaintext highlighter-rouge">postgres</code> -&gt; image default setting</li>
+      <li>password: <code class="language-plaintext highlighter-rouge">password</code> -&gt; image default setting</li>
+    </ul>
+  </li>
+  <li>開啟整個服務後要記得先下 <code class="language-plaintext highlighter-rouge">bundle exec rake db:create</code> 來創建會用到的 db，否則資料庫的內容會長在一個很奇怪的位置，後續如果要用 rake 的指令操作資料庫會沒辦法讀取到正確的資料</li>
+</ul>
+
+<h3 id="app">App</h3>
+<ul>
+  <li>Dockerfile for Rails App
+    <ul>
+      <li>2 base images <code class="language-plaintext highlighter-rouge">node:14-alpine</code>, <code class="language-plaintext highlighter-rouge">ruby:2.6.9-alpine</code>: 這邊會用到兩層 base image 是因為專案裡的 node 版本是 14，不過如果只用 <code class="language-plaintext highlighter-rouge">apk add</code> 去下載 node 的話都會載到最新的 16 版，因此最後決定載兩層 base image，並且把帶 14 版的設定複製到 ruby image 裡，node 的部分就能正常運作了</li>
+      <li>Env variables</li>
+      <li>Copy entrypoint scripts and grant execution permission</li>
+      <li>Copy everything from node image</li>
+      <li>Install all dependencies(not including node)
+        <ul>
+          <li>這邊要避開下載 node，以免把 14 版的設定覆蓋掉</li>
+        </ul>
+      </li>
+    </ul>
+
+    <div class="language-dockerfile highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">FROM</span><span class="s"> node:14-alpine as node</span>
+<span class="k">RUN </span>apk add <span class="nt">--update</span> <span class="nt">--no-cache</span> python2 <span class="o">&amp;&amp;</span> <span class="nb">ln</span> <span class="nt">-sf</span> python2 /usr/bin/python
+<span class="k">FROM</span><span class="s"> ruby:2.6.9-alpine</span>
+
+<span class="k">ENV</span><span class="s"> APP_PATH /var/app</span>
+<span class="k">ENV</span><span class="s"> BUNDLE_VERSION 2.2.33</span>
+<span class="k">ENV</span><span class="s"> BUNDLE_PATH /usr/local/bundle/gems</span>
+<span class="k">ENV</span><span class="s"> TMP_PATH /tmp/</span>
+<span class="k">ENV</span><span class="s"> RAILS_LOG_TO_STDOUT true</span>
+<span class="k">ENV</span><span class="s"> RAILS_PORT 3000</span>
+
+<span class="c"># copy entrypoint scripts and grant execution permissions</span>
+<span class="k">COPY</span><span class="s"> ./dev-docker-entrypoint.sh /usr/local/bin/dev-entrypoint.sh</span>
+<span class="k">COPY</span><span class="s"> ./test-docker-entrypoint.sh /usr/local/bin/test-entrypoint.sh</span>
+<span class="k">COPY</span><span class="s"> --from=node . .</span>
+<span class="k">RUN </span><span class="nb">chmod</span> +x /usr/local/bin/dev-entrypoint.sh <span class="o">&amp;&amp;</span> <span class="nb">chmod</span> +x /usr/local/bin/test-entrypoint.sh
+
+<span class="c"># install dependencies for application</span>
+<span class="k">RUN </span>apk <span class="nt">-U</span> add <span class="nt">--no-cache</span> <span class="se">\
+</span>build-base <span class="se">\
+</span>git <span class="se">\
+</span>postgresql-dev <span class="se">\
+</span>postgresql-client <span class="se">\
+</span>libxml2-dev <span class="se">\
+</span>libidn-dev <span class="se">\
+</span>libxslt-dev <span class="se">\
+</span>yarn <span class="se">\
+</span>imagemagick6 <span class="se">\
+</span>imagemagick6-c++ <span class="se">\
+</span>imagemagick6-dev <span class="se">\
+</span>imagemagick6-libs <span class="se">\
+</span>tzdata <span class="se">\
+</span>less <span class="se">\
+</span>curl <span class="se">\
+</span>bash <span class="se">\
+</span><span class="o">&amp;&amp;</span> <span class="nb">rm</span> <span class="nt">-rf</span> /var/cache/apk/<span class="k">*</span> <span class="se">\
+</span><span class="o">&amp;&amp;</span> <span class="nb">mkdir</span> <span class="nt">-p</span> <span class="nv">$APP_PATH</span>
+
+<span class="k">RUN </span>gem <span class="nb">install </span>bundler <span class="nt">--version</span> <span class="s2">"</span><span class="nv">$BUNDLE_VERSION</span><span class="s2">"</span> <span class="se">\
+</span><span class="o">&amp;&amp;</span> <span class="nb">rm</span> <span class="nt">-rf</span> <span class="nv">$GEM_HOME</span>/cache/<span class="k">*</span>
+
+<span class="k">RUN </span>yarn <span class="nb">install</span> <span class="nt">--check-file</span>
+
+<span class="c"># navigate to app directory</span>
+<span class="k">WORKDIR</span><span class="s"> $APP_PATH</span>
+
+<span class="k">EXPOSE</span><span class="s"> $RAILS_PORT</span>
+
+<span class="k">ENTRYPOINT</span><span class="s"> [ "bundle", "exec" ]</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Docker-compose service 設定
+    <ul>
+      <li><ins>image</ins>: 使用上述的 Dockerfile 建出的 image，跟上面幾個服務不一樣，要使用 <code class="language-plaintext highlighter-rouge">build</code> 來指定建立 image 的資料夾還有 Dockerfile 的位置</li>
+      <li><ins>volumes</ins>: 除了共用的 <code class="language-plaintext highlighter-rouge">shared_data</code> 外，還有整個專案的 mapping，需要對應到剛剛 Dockerfile 裡定義的 <code class="language-plaintext highlighter-rouge">$APP_PATH</code> 上，藉由 Docker bind mounts 達到 hot reloading 的效果；另外還有 <code class="language-plaintext highlighter-rouge">gem_cache</code> 的 volume，讓 dependencies 可以被清理和重建而不會干擾 app 的其他部分</li>
+      <li><ins>stdin_open</ins>: 讓容器的標準輸入保持打開</li>
+      <li><ins>tty</ins>: 將 Docker 分配一個虛擬終端（pseudo-tty）並綁定到容器的標準輸入上，讓我們可以使用 byebug 來進行 debug</li>
+      <li><ins>entrypoint</ins>: 設定當對 docker-compose 裡的 container 下指令時的進入點</li>
+      <li><ins>command</ins>: 當啟動容器後要執行的指令</li>
+      <li><ins>env_file</ins>: 環境設定檔</li>
+      <li><ins>environment</ins>: 環境變數，可以被寫在環境設定檔裡，這邊會分開寫是因為公司的專案裡已經有預設的環境設定檔了，為了不洗掉原本的設定才另外寫在這個項目下。</li>
+      <li><ins>depends_on</ins>: 開啟這個服務前需要其他哪些服務的支援</li>
+    </ul>
+
+    <div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">AppName_app</span><span class="pi">:</span>
+  <span class="na">build</span><span class="pi">:</span>
+    <span class="na">context</span><span class="pi">:</span> <span class="s">.</span>
+    <span class="na">dockerfile</span><span class="pi">:</span> <span class="s">Dockerfile.dev</span>
+  <span class="na">container_name</span><span class="pi">:</span> <span class="s">AppName_app</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">.:/var/app</span>
+    <span class="pi">-</span> <span class="s">shared_data:/var/shared</span>
+    <span class="pi">-</span> <span class="s">gem_cache:/usr/local/bundle/gems</span>
+  <span class="na">networks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">development</span>
+  <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">3000:3000</span>
+  <span class="na">stdin_open</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">tty</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">entrypoint</span><span class="pi">:</span> <span class="s">dev-entrypoint.sh</span>
+  <span class="na">command</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">rails server -p 3000 -b 0.0.0.0</span>
+  <span class="na">env_file</span><span class="pi">:</span> <span class="s">.env.example</span>
+  <span class="na">environment</span><span class="pi">:</span>
+    <span class="na">RAILS_ENV</span><span class="pi">:</span> <span class="s">development</span>
+    <span class="na">WEBPACKER_DEV_SERVER_HOST</span><span class="pi">:</span> <span class="s">webpacker</span>
+  <span class="na">depends_on</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">AppName_db</span>
+    <span class="pi">-</span> <span class="s">webpacker</span>
+</code></pre></div>    </div>
+  </li>
+  <li>ActionMailer 相關設定
+    <ul>
+      <li>如果會用到 ActionMailer 的話需要把 default_url_options 改成 docker-compose 上指定的 ip address，<code class="language-plaintext highlighter-rouge">config/environments/development.rb</code>: <code class="language-plaintext highlighter-rouge">config.action_mailer.default_url_options = { host: '0.0.0.0:3000' }</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="test">Test</h3>
+<ul>
+  <li>Docker-compose service 設定
+    <ul>
+      <li>image: 同樣使用 app 的 image</li>
+      <li>volumes: 與 app 的設定相同</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">AppName_test</span><span class="pi">:</span>
+  <span class="na">image</span><span class="pi">:</span> <span class="s">AppName_AppName_app</span>
+  <span class="na">container_name</span><span class="pi">:</span> <span class="s">AppName_test</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">.:/var/app</span>
+    <span class="pi">-</span> <span class="s">shared_data:/var/shared</span>
+    <span class="pi">-</span> <span class="s">gem_cache:/usr/local/bundle/gems</span>
+  <span class="na">networks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">test</span>
+  <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">3001:3000</span>
+  <span class="na">stdin_open</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">tty</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">entrypoint</span><span class="pi">:</span> <span class="s">test-entrypoint.sh</span>
+  <span class="na">command</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">rails"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">-v"</span><span class="pi">]</span>
+  <span class="na">environment</span><span class="pi">:</span>
+    <span class="na">RAILS_ENV</span><span class="pi">:</span> <span class="s">test</span>
+    <span class="na">WEBPACKER_DEV_SERVER_HOST</span><span class="pi">:</span> <span class="s">webpacker</span>
+  <span class="na">depends_on</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">AppName_db</span>
+    <span class="pi">-</span> <span class="s">webpacker</span>
+</code></pre></div></div>
+<ul>
+  <li>注意事項
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">test</code> service 在建立完之後本來就會死掉</li>
+      <li>執行測試：<code class="language-plaintext highlighter-rouge">docker-compose run --rm AppName_test rspec</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="webpacker">Webpacker</h3>
+<p>最後就是被搞得半死ㄉ webpacker 了！終於要結束了！！！😀🔪</p>
+<ul>
+  <li>Rails App’s Webpack settings: <code class="language-plaintext highlighter-rouge">config/webpacker.yml</code>
+    <ul>
+      <li>基本上就是需要把 webpacker 設定成 docker-compose 裡配置的 webpacker 路徑</li>
+      <li>dev_server:
+        <ul>
+          <li>host: <code class="language-plaintext highlighter-rouge">webpacker</code> (→ webpacker container name)</li>
+          <li>public: <code class="language-plaintext highlighter-rouge">0.0.0.0:3035</code> (→ <code class="language-plaintext highlighter-rouge">0.0.0.0</code> 為 rails host)</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Webpack container settings:
+    <ul>
+      <li>使用與 rails app container 相同的 Dockerfile、相同的 volume</li>
+      <li><code class="language-plaintext highlighter-rouge">Node.js</code> 設定 v14：
+        <ul>
+          <li><code class="language-plaintext highlighter-rouge">Dockerfile.dev</code>: 用兩層  base image
+            <ul>
+              <li><code class="language-plaintext highlighter-rouge">FROM node:14-alpine as node</code>
+                <ul>
+                  <li>下載 python2</li>
+                  <li><code class="language-plaintext highlighter-rouge">RUN apk add --update --no-cache python2 &amp;&amp; ln -sf python2 /usr/bin/python</code></li>
+                </ul>
+              </li>
+              <li><code class="language-plaintext highlighter-rouge">FROM ruby:2.6.9-alpine</code>
+                <ul>
+                  <li>把 node 那邊的設定複製過來：<code class="language-plaintext highlighter-rouge">COPY --from=node . .</code></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>要先執行 <code class="language-plaintext highlighter-rouge">yarn install</code> 等指令，生成 lock file</li>
+      <li>Heap out of memory error: <a href="https://blog.m4x.io/2021/webpack-how-to-fix-out-of-memory/">ref</a>
+        <ul>
+          <li>Set environment variable:</li>
+          <li><code class="language-plaintext highlighter-rouge">- NODE_OPTIONS=--max_old_space_size=4096</code></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">webpacker</span><span class="pi">:</span>
+  <span class="na">build</span><span class="pi">:</span>
+    <span class="na">context</span><span class="pi">:</span> <span class="s">.</span>
+    <span class="na">dockerfile</span><span class="pi">:</span> <span class="s">Dockerfile.dev</span>
+  <span class="na">command</span><span class="pi">:</span> <span class="s">ruby bin/webpack-dev-server</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">shared_data:/var/shared</span>
+    <span class="pi">-</span> <span class="s">gem_cache:/usr/local/bundle/gems</span>
+    <span class="pi">-</span> <span class="s">.:/var/app</span>
+  <span class="na">environment</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">NODE_OPTIONS=--max_old_space_size=4096</span>
+    <span class="pi">-</span> <span class="s">NODE_ENV=development</span>
+    <span class="pi">-</span> <span class="s">RAILS_ENV=development</span>
+    <span class="pi">-</span> <span class="s">WEBPACKER_DEV_SERVER_HOST=0.0.0.0</span>
+  <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">3035:3035"</span>
+  <span class="na">networks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">development</span>
+</code></pre></div></div>
+
+<hr />
+<h2 id="所有改動過的檔案列表">所有改動過的檔案列表</h2>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">config/cable.yml</code>: <code class="language-plaintext highlighter-rouge">url: "redis://AppName_redis:6379/1"</code></li>
+  <li><code class="language-plaintext highlighter-rouge">config/database.yml</code>:
+    <ul>
+      <li>host: AppName_db(db service name)</li>
+      <li>username: postgres</li>
+      <li>password: postgres</li>
+      <li>database: postgres</li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">config/environments/development.rb</code>: <code class="language-plaintext highlighter-rouge">config.action_mailer.default_url_options = { host: '0.0.0.0:3000' }</code></li>
+  <li><code class="language-plaintext highlighter-rouge">config/settings.yml</code>: <code class="language-plaintext highlighter-rouge">host: localhost:3000</code></li>
+  <li><code class="language-plaintext highlighter-rouge">config/webpacker.yml</code>:
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">host: webpacker</code></li>
+      <li><code class="language-plaintext highlighter-rouge">public: 0.0.0.0:3035</code></li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+<p>好ㄌ….大概就是這樣，寫這篇真的豪累，但是寫 k8s 那兩篇好像會更累🥲？（哭ㄌ</p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li>Dockerfile base: <a href="https://betterprogramming.pub/rails-6-development-with-docker-55437314a1ad">Rails 6 development with Docker and Docker Compose</a></li>
+  <li>Webpacker container: <a href="https://medium.com/@joehwang.com/rails%E9%96%8B%E7%99%BC%E7%92%B0%E5%A2%83%E5%AE%B9%E5%99%A8%E5%8C%96-505dba2c9678">rails開發環境容器化實戰指南</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/19/dockerize-rails.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

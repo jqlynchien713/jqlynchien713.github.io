@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp; Rails | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp; Rails" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分： 設定 Rails &amp; Traefik 設定 AWS 設定 Gitlab runner 自動化部署 因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章（不知不覺就變成連載系列了🫠） 部署流程 實作流程 本地端進行部署 開啟 rails production server 確認本地端 Docker compose build/up 皆可順利執行 手動 ssh 進入 EC2 部署 將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明 利用 Gitlab runner 自動部署 將前一步的所有設定、部署指令自動化 實際部署流程 這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹： 設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去） 設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務 設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去 自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（.gitlab-ci.yml），而腳本的內容則是實際在部署時需要對機器本身下的設定，內容如下： 開啟 Docker Swarm 創建 traefik-public 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy 指定每次 Traefik 更新時固定使用同個節點 使用 docker stack 部署 Traefik 部署 Rails App 實際部署 Docker Swarm 的流程 Rails &amp; Traefik Service Traefik Service Settings Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 Traefik 會有一個 traefik.yml 用於部署 traefik stack，而 Rails App 則是使用原始的 docker-compose.yml 去部署 task stack（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 task） 首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 dockerswarm.rocks 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔 traefik.yml / Task-Manager-Ruby · GitLab）： Network：需要新增一個叫 traefik-public 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通 Volumes：新增一個 traefik-public-certificate 的 volume，用於存放已經申請過的憑證 Service：分為兩部分需要注意，Command 與 Deploy Label Command：Traefik 的基本設定，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等 Deploy Label：為了要開啟 Traefik Dashboard 而設定的 reverse proxy routing，主要有下列幾點要設定： 開啟 Traefik 並加入 traefik-public Network Dashboard 登入帳密 Http/Https host Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https Load balancer port：當有目的地是 host 的請求，Traefik 需要將其導向的 port 設定 wildcard 驗證過的 domain 到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。 Rails App(Application) Service 接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。 首先必須生成一組 RAILS_MASTER_KEY，因為 Rails 在 Production 環境中需要有 RAILS_MASTER_KEY 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定 Dockerfile 這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（config/boxing.rb）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）： Source Code Root Ignore File Extra Packages: Node.js &amp; Python Revision Information Sentry Support Asset Precompile: True Health Check 補充：OpenBox - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint Docker-compose file 與在本地端設定的 docker-compose.yml 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定： RAILS_MASTER_KEY：剛剛生成的 RAILS_MASTER_KEY 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 RAILS_MASTER_KEY 放在 .env、或者設定為 app service 的 environment var，可以參考本地端的 docker-compose Line 55） DATABSE_URL：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...] 做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像這個檔案類似。 補充 Load Balancer Port 設定 假設今天我們的 domain 是 abc.dev 有用戶請求了 traefik.abc.dev(aka 我們的 host name)，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080 Wildcard 相關知識 相關設定的補充知識，這邊需要參考我已經寫好的設定檔 Wildcard：ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org) 可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證 屬於 Let’s Encrypt 發放的其中一種憑證格式 給予 route53 權限的原因 因為設定 DNS challenge 與 DNS Challenge Provider 為 route53 DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host Route53 提供自動更新憑證的 API 第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分） 希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（" />
+<meta property="og:description" content="接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分： 設定 Rails &amp; Traefik 設定 AWS 設定 Gitlab runner 自動化部署 因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章（不知不覺就變成連載系列了🫠） 部署流程 實作流程 本地端進行部署 開啟 rails production server 確認本地端 Docker compose build/up 皆可順利執行 手動 ssh 進入 EC2 部署 將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明 利用 Gitlab runner 自動部署 將前一步的所有設定、部署指令自動化 實際部署流程 這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹： 設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去） 設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務 設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去 自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（.gitlab-ci.yml），而腳本的內容則是實際在部署時需要對機器本身下的設定，內容如下： 開啟 Docker Swarm 創建 traefik-public 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy 指定每次 Traefik 更新時固定使用同個節點 使用 docker stack 部署 Traefik 部署 Rails App 實際部署 Docker Swarm 的流程 Rails &amp; Traefik Service Traefik Service Settings Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 Traefik 會有一個 traefik.yml 用於部署 traefik stack，而 Rails App 則是使用原始的 docker-compose.yml 去部署 task stack（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 task） 首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 dockerswarm.rocks 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔 traefik.yml / Task-Manager-Ruby · GitLab）： Network：需要新增一個叫 traefik-public 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通 Volumes：新增一個 traefik-public-certificate 的 volume，用於存放已經申請過的憑證 Service：分為兩部分需要注意，Command 與 Deploy Label Command：Traefik 的基本設定，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等 Deploy Label：為了要開啟 Traefik Dashboard 而設定的 reverse proxy routing，主要有下列幾點要設定： 開啟 Traefik 並加入 traefik-public Network Dashboard 登入帳密 Http/Https host Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https Load balancer port：當有目的地是 host 的請求，Traefik 需要將其導向的 port 設定 wildcard 驗證過的 domain 到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。 Rails App(Application) Service 接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。 首先必須生成一組 RAILS_MASTER_KEY，因為 Rails 在 Production 環境中需要有 RAILS_MASTER_KEY 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定 Dockerfile 這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（config/boxing.rb）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）： Source Code Root Ignore File Extra Packages: Node.js &amp; Python Revision Information Sentry Support Asset Precompile: True Health Check 補充：OpenBox - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint Docker-compose file 與在本地端設定的 docker-compose.yml 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定： RAILS_MASTER_KEY：剛剛生成的 RAILS_MASTER_KEY 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 RAILS_MASTER_KEY 放在 .env、或者設定為 app service 的 environment var，可以參考本地端的 docker-compose Line 55） DATABSE_URL：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...] 做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像這個檔案類似。 補充 Load Balancer Port 設定 假設今天我們的 domain 是 abc.dev 有用戶請求了 traefik.abc.dev(aka 我們的 host name)，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080 Wildcard 相關知識 相關設定的補充知識，這邊需要參考我已經寫好的設定檔 Wildcard：ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org) 可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證 屬於 Let’s Encrypt 發放的其中一種憑證格式 給予 route53 權限的原因 因為設定 DNS challenge 與 DNS Challenge Provider 為 route53 DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host Route53 提供自動更新憑證的 API 第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分） 希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/08/03/coscup2.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/08/03/coscup2.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-08-03T14:33:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp; Rails" />
+<script type="application/ld+json">
+{"description":"接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分： 設定 Rails &amp; Traefik 設定 AWS 設定 Gitlab runner 自動化部署 因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章（不知不覺就變成連載系列了🫠） 部署流程 實作流程 本地端進行部署 開啟 rails production server 確認本地端 Docker compose build/up 皆可順利執行 手動 ssh 進入 EC2 部署 將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明 利用 Gitlab runner 自動部署 將前一步的所有設定、部署指令自動化 實際部署流程 這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹： 設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去） 設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務 設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去 自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（.gitlab-ci.yml），而腳本的內容則是實際在部署時需要對機器本身下的設定，內容如下： 開啟 Docker Swarm 創建 traefik-public 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy 指定每次 Traefik 更新時固定使用同個節點 使用 docker stack 部署 Traefik 部署 Rails App 實際部署 Docker Swarm 的流程 Rails &amp; Traefik Service Traefik Service Settings Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 Traefik 會有一個 traefik.yml 用於部署 traefik stack，而 Rails App 則是使用原始的 docker-compose.yml 去部署 task stack（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 task） 首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 dockerswarm.rocks 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔 traefik.yml / Task-Manager-Ruby · GitLab）： Network：需要新增一個叫 traefik-public 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通 Volumes：新增一個 traefik-public-certificate 的 volume，用於存放已經申請過的憑證 Service：分為兩部分需要注意，Command 與 Deploy Label Command：Traefik 的基本設定，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等 Deploy Label：為了要開啟 Traefik Dashboard 而設定的 reverse proxy routing，主要有下列幾點要設定： 開啟 Traefik 並加入 traefik-public Network Dashboard 登入帳密 Http/Https host Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https Load balancer port：當有目的地是 host 的請求，Traefik 需要將其導向的 port 設定 wildcard 驗證過的 domain 到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。 Rails App(Application) Service 接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。 首先必須生成一組 RAILS_MASTER_KEY，因為 Rails 在 Production 環境中需要有 RAILS_MASTER_KEY 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定 Dockerfile 這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（config/boxing.rb）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）： Source Code Root Ignore File Extra Packages: Node.js &amp; Python Revision Information Sentry Support Asset Precompile: True Health Check 補充：OpenBox - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint Docker-compose file 與在本地端設定的 docker-compose.yml 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定： RAILS_MASTER_KEY：剛剛生成的 RAILS_MASTER_KEY 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 RAILS_MASTER_KEY 放在 .env、或者設定為 app service 的 environment var，可以參考本地端的 docker-compose Line 55） DATABSE_URL：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...] 做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像這個檔案類似。 補充 Load Balancer Port 設定 假設今天我們的 domain 是 abc.dev 有用戶請求了 traefik.abc.dev(aka 我們的 host name)，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080 Wildcard 相關知識 相關設定的補充知識，這邊需要參考我已經寫好的設定檔 Wildcard：ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org) 可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證 屬於 Let’s Encrypt 發放的其中一種憑證格式 給予 route53 權限的原因 因為設定 DNS challenge 與 DNS Challenge Provider 為 route53 DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host Route53 提供自動更新憑證的 API 第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分） 希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（","url":"https://jqlynchien713.github.io/2022/08/03/coscup2.html","headline":"Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp; Rails","@type":"BlogPosting","dateModified":"2022-08-03T14:33:00+00:00","datePublished":"2022-08-03T14:33:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/08/03/coscup2.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp; Rails</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-08-03T14:33:00+00:00" itemprop="datePublished">Aug 3, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 18 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">COSCUP</span>
+    
+      <span class="tag">docker-swarm</span>
+    
+      <span class="tag">traefik</span>
+    
+      <span class="tag">deploy</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#部署流程">部署流程</a><ul><li><a href="#實作流程">實作流程</a></li><li><a href="#實際部署流程">實際部署流程</a></li></ul></li><li><a href="#rails--traefik-service">Rails &amp; Traefik Service</a><ul><li><a href="#traefik-service-settings">Traefik Service Settings</a></li><li><a href="#rails-appapplication-service">Rails App(Application) Service</a><ul><li><a href="#dockerfile">Dockerfile</a></li><li><a href="#docker-compose-file">Docker-compose file</a></li></ul></li><li><a href="#補充">補充</a><ul><li><a href="#LB">Load Balancer Port 設定</a></li><li><a href="#wildcard">Wildcard 相關知識</a></li></ul></li></ul></li></ul></div>
+    <p>接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分：</p>
+
+<ol>
+  <li>設定 Rails &amp; Traefik</li>
+  <li>設定 AWS</li>
+  <li>設定 Gitlab runner 自動化部署</li>
+</ol>
+
+<p>因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章<br />（不知不覺就變成連載系列了🫠）</p>
+
+<h2 id="部署流程">部署流程</h2>
+
+<h3 id="實作流程">實作流程</h3>
+
+<ul>
+  <li>本地端進行部署
+    <ul>
+      <li>開啟 rails production server</li>
+      <li>確認本地端 Docker compose build/up 皆可順利執行</li>
+    </ul>
+  </li>
+  <li>手動 ssh 進入 EC2 部署
+    <ul>
+      <li>將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明</li>
+    </ul>
+  </li>
+  <li>利用 Gitlab runner 自動部署
+    <ul>
+      <li>將前一步的所有設定、部署指令自動化</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="實際部署流程">實際部署流程</h3>
+
+<p>這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹：</p>
+
+<ol>
+  <li>設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去）</li>
+  <li>設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務</li>
+  <li>設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去</li>
+  <li>自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（<code class="language-plaintext highlighter-rouge">.gitlab-ci.yml</code>），而腳本的內容則是<strong>實際在部署時需要對機器本身下的設定</strong>，內容如下：
+    <ol>
+      <li>開啟 Docker Swarm</li>
+      <li>創建 <code class="language-plaintext highlighter-rouge">traefik-public</code> 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy</li>
+      <li>指定每次 Traefik 更新時固定使用同個節點</li>
+      <li>使用 docker stack 部署 Traefik</li>
+      <li>部署 Rails App</li>
+    </ol>
+
+    <p id="order1"><img src="/assets/img/order1.jpg" alt="order1" /></p>
+
+    <p>實際部署 Docker Swarm 的流程</p>
+  </li>
+</ol>
+
+<h2 id="rails--traefik-service">Rails &amp; Traefik Service</h2>
+
+<h3 id="traefik-service-settings">Traefik Service Settings</h3>
+
+<p>Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 <strong>Traefik 會有一個 <code class="language-plaintext highlighter-rouge">traefik.yml</code> 用於部署 traefik stack</strong>，而 <strong>Rails App 則是使用原始的 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 去部署 task stack</strong>（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 <code class="language-plaintext highlighter-rouge">task</code>）</p>
+
+<p>首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 <a href="https://dockerswarm.rocks/traefik/">dockerswarm.rocks</a> 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔  <a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/traefik.yml">traefik.yml / Task-Manager-Ruby · GitLab</a>）：</p>
+
+<ul>
+  <li>Network：需要新增一個叫 <code class="language-plaintext highlighter-rouge">traefik-public</code> 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通</li>
+  <li>Volumes：新增一個 <code class="language-plaintext highlighter-rouge">traefik-public-certificate</code> 的 volume，用於存放已經申請過的憑證</li>
+  <li>Service：分為兩部分需要注意，Command 與 Deploy Label
+    <ul>
+      <li>Command：Traefik 的<strong>基本設定</strong>，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等</li>
+      <li>Deploy Label：為了要開啟 Traefik Dashboard 而設定的 <strong>reverse proxy routing</strong>，主要有下列幾點要設定：
+        <ul>
+          <li>開啟 Traefik 並加入 <code class="language-plaintext highlighter-rouge">traefik-public</code> Network</li>
+          <li>Dashboard 登入帳密</li>
+          <li>Http/Https host</li>
+          <li>Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https</li>
+          <li><a href="#LB">Load balancer</a> port：當有目的地是 host 的請求，Traefik 需要將其導向的 port</li>
+          <li>設定 <a href="#wildcard">wildcard</a> 驗證過的 domain</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<p>到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。</p>
+
+<h3 id="rails-appapplication-service">Rails App(Application) Service</h3>
+
+<p>接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。</p>
+
+<p>首先必須生成一組 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code>，因為 Rails 在 Production 環境中需要有 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定</p>
+
+<h4 id="dockerfile">Dockerfile</h4>
+
+<p>這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（<code class="language-plaintext highlighter-rouge">config/boxing.rb</code>）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）：</p>
+
+<ul>
+  <li>Source Code Root</li>
+  <li>Ignore File</li>
+  <li><strong>Extra Packages: Node.js &amp; Python</strong></li>
+  <li>Revision Information</li>
+  <li>Sentry Support</li>
+  <li><strong>Asset Precompile: True</strong></li>
+  <li>Health Check</li>
+</ul>
+
+<blockquote>
+  <p>補充：<strong><a href="https://github.com/elct9620/openbox">OpenBox</a></strong> - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint</p>
+
+</blockquote>
+
+<h4 id="docker-compose-file">Docker-compose file</h4>
+
+<p>與在本地端設定的 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code>：剛剛生成的 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 放在 .env、或者設定為 app service 的 environment var，可以參考<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/docker-compose-local.yml">本地端的 docker-compose</a> Line 55）</li>
+  <li><code class="language-plaintext highlighter-rouge">DATABSE_URL</code>：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 <code class="language-plaintext highlighter-rouge">postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...]</code></li>
+</ul>
+
+<p>做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/docker-compose.yml">這個檔案</a>類似。</p>
+
+<hr />
+<h3 id="補充">補充</h3>
+<h4 id="LB">Load Balancer Port 設定</h4>
+<p>假設今天我們的 domain 是 <code class="language-plaintext highlighter-rouge">abc.dev</code> 有用戶請求了 <code class="language-plaintext highlighter-rouge">traefik.abc.dev(aka 我們的 host name)</code>，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080</p>
+
+<h4 id="wildcard">Wildcard 相關知識</h4>
+<p>相關設定的補充知識，這邊需要參考我已經寫好的<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/traefik.yml">設定檔</a></p>
+
+<ul>
+  <li>Wildcard：<a href="https://letsencrypt.org/zh-tw/docs/challenge-types/#dns-01-%E8%80%83%E9%A9%97">ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org)</a>
+    <ul>
+      <li>可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證</li>
+      <li>屬於 Let’s Encrypt 發放的其中一種憑證格式</li>
+    </ul>
+  </li>
+  <li>給予 route53 權限的原因
+    <ul>
+      <li>因為設定 DNS challenge 與 DNS Challenge Provider 為 route53</li>
+      <li>DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host</li>
+      <li>Route53 提供自動更新憑證的 API</li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+<p>第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分）</p>
+
+<p>希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（</p>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/08/03/coscup2.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

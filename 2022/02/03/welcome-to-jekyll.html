@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>部落格開始營業！（還有一些 Jekyll 的設定） | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="部落格開始營業！（還有一些 Jekyll 的設定）" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="今天終於下定決心好好搞這件事了，之後會把學到的重要東西都記錄在這 目前會以實習學到的東西為主，學校那邊等規劃完再說（？ 希望我可以持之以恆，不要半途而廢🥲 順便紀錄一下如何架出這個網站，這裡是選用 ruby 的靜態網頁框架 jekyll 搭出來的，基本上我只有照著官方的文件 new 出一個 project 而已，比較麻煩的地方是改變網站的 styling 在查了一堆資料、改了一堆設定之後還是沒結果，最後決定重開一個新的 project，然後在專案的根目錄開一個叫 assets/ 的資料夾，然後放一個 main.scss 的檔案（內容如下），就好了！！（神奇）（這個檔案甚至是從 minima gem 裡複製來的） --- # Only the main Sass file needs front matter (the dashes are enough) --- // 引入的 Google Fonts @import url(&#39;https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&amp;display=swap&#39;); // Minima 主題設定的參數，要在引入 minima stylesheet 之前就先設定好要 override 的參數 $base-font-family: &#39;Roboto Mono&#39;, monospace; $base-font-weight: 300; $brand-color: #46CFC5; $code-bg: #D5E8ED; $link-color: #4265DC; // 想要另外宣告的 styling .rss-subscribe &gt; a, a.u-email, span.username{ color: $brand-color; &amp;:visited{ color: darken($brand-color, 15%); } } // 最後再引入 minima 的 stylesheet @import &quot;minima&quot;; 當 jekyll 在 build 時，&lt;source&gt;/assets/ 的優先度高於 &lt;theme gem&gt;/assets/，因此可以在 &lt;source&gt;/assets/ 指定想要覆蓋掉的 styling；對於其他資料夾（like _includes, _layout … etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了。 最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 &lt;username&gt;.github.io 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時） Reference Themes Configuration" />
+<meta property="og:description" content="今天終於下定決心好好搞這件事了，之後會把學到的重要東西都記錄在這 目前會以實習學到的東西為主，學校那邊等規劃完再說（？ 希望我可以持之以恆，不要半途而廢🥲 順便紀錄一下如何架出這個網站，這裡是選用 ruby 的靜態網頁框架 jekyll 搭出來的，基本上我只有照著官方的文件 new 出一個 project 而已，比較麻煩的地方是改變網站的 styling 在查了一堆資料、改了一堆設定之後還是沒結果，最後決定重開一個新的 project，然後在專案的根目錄開一個叫 assets/ 的資料夾，然後放一個 main.scss 的檔案（內容如下），就好了！！（神奇）（這個檔案甚至是從 minima gem 裡複製來的） --- # Only the main Sass file needs front matter (the dashes are enough) --- // 引入的 Google Fonts @import url(&#39;https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&amp;display=swap&#39;); // Minima 主題設定的參數，要在引入 minima stylesheet 之前就先設定好要 override 的參數 $base-font-family: &#39;Roboto Mono&#39;, monospace; $base-font-weight: 300; $brand-color: #46CFC5; $code-bg: #D5E8ED; $link-color: #4265DC; // 想要另外宣告的 styling .rss-subscribe &gt; a, a.u-email, span.username{ color: $brand-color; &amp;:visited{ color: darken($brand-color, 15%); } } // 最後再引入 minima 的 stylesheet @import &quot;minima&quot;; 當 jekyll 在 build 時，&lt;source&gt;/assets/ 的優先度高於 &lt;theme gem&gt;/assets/，因此可以在 &lt;source&gt;/assets/ 指定想要覆蓋掉的 styling；對於其他資料夾（like _includes, _layout … etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了。 最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 &lt;username&gt;.github.io 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時） Reference Themes Configuration" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/02/03/welcome-to-jekyll.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/02/03/welcome-to-jekyll.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-03T08:34:53+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="部落格開始營業！（還有一些 Jekyll 的設定）" />
+<script type="application/ld+json">
+{"description":"今天終於下定決心好好搞這件事了，之後會把學到的重要東西都記錄在這 目前會以實習學到的東西為主，學校那邊等規劃完再說（？ 希望我可以持之以恆，不要半途而廢🥲 順便紀錄一下如何架出這個網站，這裡是選用 ruby 的靜態網頁框架 jekyll 搭出來的，基本上我只有照著官方的文件 new 出一個 project 而已，比較麻煩的地方是改變網站的 styling 在查了一堆資料、改了一堆設定之後還是沒結果，最後決定重開一個新的 project，然後在專案的根目錄開一個叫 assets/ 的資料夾，然後放一個 main.scss 的檔案（內容如下），就好了！！（神奇）（這個檔案甚至是從 minima gem 裡複製來的） --- # Only the main Sass file needs front matter (the dashes are enough) --- // 引入的 Google Fonts @import url(&#39;https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&amp;display=swap&#39;); // Minima 主題設定的參數，要在引入 minima stylesheet 之前就先設定好要 override 的參數 $base-font-family: &#39;Roboto Mono&#39;, monospace; $base-font-weight: 300; $brand-color: #46CFC5; $code-bg: #D5E8ED; $link-color: #4265DC; // 想要另外宣告的 styling .rss-subscribe &gt; a, a.u-email, span.username{ color: $brand-color; &amp;:visited{ color: darken($brand-color, 15%); } } // 最後再引入 minima 的 stylesheet @import &quot;minima&quot;; 當 jekyll 在 build 時，&lt;source&gt;/assets/ 的優先度高於 &lt;theme gem&gt;/assets/，因此可以在 &lt;source&gt;/assets/ 指定想要覆蓋掉的 styling；對於其他資料夾（like _includes, _layout … etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了。 最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 &lt;username&gt;.github.io 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時） Reference Themes Configuration","url":"https://jqlynchien713.github.io/2022/02/03/welcome-to-jekyll.html","headline":"部落格開始營業！（還有一些 Jekyll 的設定）","@type":"BlogPosting","dateModified":"2022-02-03T08:34:53+00:00","datePublished":"2022-02-03T08:34:53+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/02/03/welcome-to-jekyll.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">部落格開始營業！（還有一些 Jekyll 的設定）</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-02-03T08:34:53+00:00" itemprop="datePublished">Feb 3, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 6 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">jekyll</span>
+    
+      <span class="tag">update</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"></div>
+    <p>今天終於下定決心好好搞這件事了，之後會把學到的重要東西都記錄在這</p>
+
+<p>目前會以實習學到的東西為主，學校那邊等規劃完再說（？</p>
+
+<p>希望我可以持之以恆，不要半途而廢🥲</p>
+
+<hr />
+
+<p><br />
+順便紀錄一下如何架出這個網站，這裡是選用 ruby 的靜態網頁框架 jekyll 搭出來的，基本上我只有照著官方的文件 new 出一個 project 而已，比較麻煩的地方是改變網站的 styling</p>
+
+<p>在查了一堆資料、改了一堆設定之後還是沒結果，最後決定重開一個新的 project，然後在專案的根目錄開一個叫 <code class="language-plaintext highlighter-rouge">assets/</code> 的資料夾，然後放一個 <code class="language-plaintext highlighter-rouge">main.scss</code> 的檔案（內容如下），就好了！！（神奇）（這個檔案甚至是從 minima gem 裡複製來的）</p>
+
+<div class="language-sass highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">---</span>
+<span class="nn">#</span> <span class="nt">Only</span> <span class="nt">the</span> <span class="nt">main</span> <span class="nt">Sass</span> <span class="nt">file</span> <span class="nt">needs</span> <span class="nt">front</span> <span class="nt">matter</span> <span class="o">(</span><span class="nt">the</span> <span class="nt">dashes</span> <span class="nt">are</span> <span class="nt">enough</span><span class="o">)</span>
+<span class="nt">---</span>
+<span class="c1">// 引入的 Google Fonts</span>
+<span class="k">@import</span> <span class="s">url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&amp;display=swap');</span>
+
+<span class="c1">// Minima 主題設定的參數，要在引入 minima stylesheet 之前就先設定好要 override 的參數</span>
+<span class="nv">$base-font-family</span><span class="p">:</span> <span class="s1">'Roboto Mono'</span><span class="o">,</span> <span class="nb">monospace</span><span class="err">;</span>
+<span class="nv">$base-font-weight</span><span class="p">:</span> <span class="m">300</span><span class="err">;</span>
+<span class="nv">$brand-color</span><span class="p">:</span> <span class="mh">#46CFC5</span><span class="err">;</span>
+<span class="nv">$code-bg</span><span class="p">:</span> <span class="mh">#D5E8ED</span><span class="err">;</span>
+<span class="nv">$link-color</span><span class="p">:</span> <span class="mh">#4265DC</span><span class="err">;</span>
+
+<span class="c1">// 想要另外宣告的 styling</span>
+<span class="nc">.rss-subscribe</span> <span class="o">&gt;</span> <span class="nt">a</span><span class="o">,</span> <span class="nt">a</span><span class="nc">.u-email</span><span class="o">,</span> <span class="nt">span</span><span class="nc">.username</span><span class="err">{</span>
+  <span class="nl">color</span><span class="p">:</span> <span class="nv">$brand-color</span><span class="err">;</span>
+  <span class="k">&amp;</span><span class="nd">:visited</span><span class="err">{</span>
+    <span class="nl">color</span><span class="p">:</span> <span class="nf">darken</span><span class="p">(</span><span class="nv">$brand-color</span><span class="o">,</span> <span class="m">15%</span><span class="p">)</span><span class="err">;</span>
+  <span class="err">}</span>
+<span class="err">}</span>
+
+<span class="c1">// 最後再引入 minima 的 stylesheet</span>
+<span class="k">@import</span> <span class="s">"minima";</span>
+</code></pre></div></div>
+
+<p>當 jekyll 在 build 時，<code class="language-plaintext highlighter-rouge">&lt;source&gt;/assets/</code> 的優先度高於 <code class="language-plaintext highlighter-rouge">&lt;theme gem&gt;/assets/</code>，因此可以在 <code class="language-plaintext highlighter-rouge">&lt;source&gt;/assets/</code> 指定想要覆蓋掉的 styling；對於其他資料夾（like <code class="language-plaintext highlighter-rouge">_includes</code>, <code class="language-plaintext highlighter-rouge">_layout</code> … etc.）也是一樣道理，所以如果想要改主題的設定的話，只要把想要修改的內容從 gem 複製到專案的根目錄（但架構要跟 gem 裡是一樣的），就可以客製自己要的主題了。</p>
+
+<p>最後就是發部到 Github Pages 上，真的比我想像的還要快超多，只要在 Github 建立一個 <code class="language-plaintext highlighter-rouge">&lt;username&gt;.github.io</code> 的 repo，然後把整個專案推上去就可以用了！！！（非常神奇）（原本還以為可能又要折騰一兩小時）</p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://jekyllrb.com/docs/themes/">Themes Configuration</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/02/03/welcome-to-jekyll.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

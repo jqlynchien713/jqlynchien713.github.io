@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.7.1 -->
+<title>VScode ssh to Windows server 遠端寫扣！ | Jacquelyn’s Blog</title>
+<meta name="generator" content="Jekyll v4.2.1" />
+<meta property="og:title" content="VScode ssh to Windows server 遠端寫扣！" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: Remote - SSH，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！ Windows SSH Server Configuration 首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺 Step 1 安裝 SSH server 首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」 Step 2 執行 SSH server 接下來要以系統管理員開啟 Windows PowerShell，並輸入以下指令來開啟 server： Start-Service sshd # 開啟 SSH server Set-Service -Name sshd -StartupType &#39;Automatic&#39; # 開機時自動啟用，擔心資安問題也可以把 &#39;Automatic&#39; 改成 &#39;Manual&#39; 設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛 VScode plugin: Remote - SSH 安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛 安裝完後會發現左下角有一個藍色的框框可以點 點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip 第一次使用時需要先新增主機，按照對話筐的提示（ssh user@hostname）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！ 註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼 Reference 大神學長的網誌：【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記 Remote - SSH plugin 本人的連結：Remote - SSH" />
+<meta property="og:description" content="雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: Remote - SSH，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！ Windows SSH Server Configuration 首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺 Step 1 安裝 SSH server 首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」 Step 2 執行 SSH server 接下來要以系統管理員開啟 Windows PowerShell，並輸入以下指令來開啟 server： Start-Service sshd # 開啟 SSH server Set-Service -Name sshd -StartupType &#39;Automatic&#39; # 開機時自動啟用，擔心資安問題也可以把 &#39;Automatic&#39; 改成 &#39;Manual&#39; 設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛 VScode plugin: Remote - SSH 安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛 安裝完後會發現左下角有一個藍色的框框可以點 點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip 第一次使用時需要先新增主機，按照對話筐的提示（ssh user@hostname）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！ 註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼 Reference 大神學長的網誌：【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記 Remote - SSH plugin 本人的連結：Remote - SSH" />
+<link rel="canonical" href="https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html" />
+<meta property="og:url" content="https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html" />
+<meta property="og:site_name" content="Jacquelyn’s Blog" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-06-22T13:42:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="VScode ssh to Windows server 遠端寫扣！" />
+<script type="application/ld+json">
+{"description":"雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: Remote - SSH，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！ Windows SSH Server Configuration 首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺 Step 1 安裝 SSH server 首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」 Step 2 執行 SSH server 接下來要以系統管理員開啟 Windows PowerShell，並輸入以下指令來開啟 server： Start-Service sshd # 開啟 SSH server Set-Service -Name sshd -StartupType &#39;Automatic&#39; # 開機時自動啟用，擔心資安問題也可以把 &#39;Automatic&#39; 改成 &#39;Manual&#39; 設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛 VScode plugin: Remote - SSH 安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛 安裝完後會發現左下角有一個藍色的框框可以點 點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip 第一次使用時需要先新增主機，按照對話筐的提示（ssh user@hostname）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！ 註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼 Reference 大神學長的網誌：【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記 Remote - SSH plugin 本人的連結：Remote - SSH","url":"https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html","headline":"VScode ssh to Windows server 遠端寫扣！","@type":"BlogPosting","dateModified":"2022-06-22T13:42:00+00:00","datePublished":"2022-06-22T13:42:00+00:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png"><link type="application/atom+xml" rel="alternate" href="https://jqlynchien713.github.io/feed.xml" title="Jacquelyn's Blog" /></head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Jacquelyn&#39;s Blog</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/tags/">Tags</a><a class="page-link" href="/about/">About</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
+  <!-- enable latex -->
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+  <header class="post-header">
+    <h1 class="post-title p-name" itemprop="name headline">VScode ssh to Windows server 遠端寫扣！</h1>
+    <p class="post-meta">
+    <time class="dt-published" datetime="2022-06-22T13:42:00+00:00" itemprop="datePublished">Jun 22, 2022
+      | 👀
+      <span class="reading-time" title="Estimated read time">
+        
+        
+                                 7 mins
+                                 
+      </span>
+    </time>
+    |
+    
+      <span class="tag">update</span>
+    
+      <span class="tag">ssh</span>
+    
+      <span class="tag">config</span>
+    
+      <span class="tag">vscode</span>
+    </p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <div class="sidebar"><ul><li><a href="#windows-ssh-server-configuration">Windows SSH Server Configuration</a><ul><li><a href="#step-1-安裝-ssh-server">Step 1 安裝 SSH server</a></li><li><a href="#step-2-執行-ssh-server">Step 2 執行 SSH server</a></li></ul></li><li><a href="#vscode-plugin-remote---ssh">VScode plugin: Remote - SSH</a></li></ul></div>
+    <p>雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: <a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh">Remote - SSH</a>，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！</p>
+
+<h2 id="windows-ssh-server-configuration">Windows SSH Server Configuration</h2>
+
+<p>首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺</p>
+
+<h3 id="step-1-安裝-ssh-server">Step 1 安裝 SSH server</h3>
+
+<p>首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」</p>
+
+<p><img src="/assets/img/ssh1.png" alt="" />
+<img src="/assets/img/ssh2.png" alt="" /></p>
+
+<h3 id="step-2-執行-ssh-server">Step 2 執行 SSH server</h3>
+
+<p>接下來要以<strong>系統管理員</strong>開啟 Windows PowerShell，並輸入以下指令來開啟 server：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Start-Service sshd  # 開啟 SSH server
+Set-Service -Name sshd -StartupType 'Automatic'  # 開機時自動啟用，擔心資安問題也可以把 'Automatic' 改成 'Manual'
+</code></pre></div></div>
+<p>設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛</p>
+
+<h2 id="vscode-plugin-remote---ssh">VScode plugin: Remote - SSH</h2>
+
+<p>安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛</p>
+
+<p><img src="/assets/img/ssh-vscode.png" alt="" /></p>
+
+<p>安裝完後會發現左下角有一個藍色的框框可以點
+<img src="/assets/img/ssh-btn.png" alt="" /></p>
+
+<p>點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip
+<img src="/assets/img/ssh-host.png" alt="" /></p>
+
+<p>第一次使用時需要先新增主機，按照對話筐的提示（<code class="language-plaintext highlighter-rouge">ssh user@hostname</code>）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！</p>
+<blockquote>
+  <p>註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼</p>
+</blockquote>
+
+<p><img src="/assets/img/ssh-new.png" alt="" /></p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li>大神學長的網誌：<a href="https://www.wongwonggoods.com/draft_notes/windows/windows-ssh/">【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記</a></li>
+  <li>Remote - SSH plugin 本人的連結：<a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh">Remote - SSH</a></li>
+</ul>
+
+  </div>
+
+  
+  
+    <script src="https://utteranc.es/client.js"
+            repo=jqlynchien713/jqlynchien713.github.io
+            issue-term=pathname
+            label=Comments
+            theme=github-light
+            crossorigin= "anonymous"
+            async>
+    </script>
+  
+
+<a class="u-url" href="/2022/06/22/vscode-ssh.html" hidden></a>
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Jacquelyn&#39;s Blog</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Jacquelyn&#39;s Blog</li><li><a class="u-email" href="mailto:jqlynchien713@gmail.com">jqlynchien713@gmail.com</a></li></ul>
+      </div>
+
+      <div class="footer-col footer-col-3"><ul class="social-media-list"><li><a href="https://github.com/jqlynchien713"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">jqlynchien713</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-2">
+        <p>ʕ •ᴥ•ʔ</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

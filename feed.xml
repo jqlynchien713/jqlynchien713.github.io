@@ -1,0 +1,1069 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.1">Jekyll</generator><link href="https://jqlynchien713.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://jqlynchien713.github.io/" rel="alternate" type="text/html" /><updated>2023-03-17T09:15:07+00:00</updated><id>https://jqlynchien713.github.io/feed.xml</id><title type="html">Jacquelyn’s Blog</title><subtitle>ʕ •ᴥ•ʔ</subtitle><entry><title type="html">Deploy Rails with Docker Swarm (4) - Gitlab Runner 自動化部署</title><link href="https://jqlynchien713.github.io/2022/08/03/coscup4.html" rel="alternate" type="text/html" title="Deploy Rails with Docker Swarm (4) - Gitlab Runner 自動化部署" /><published>2022-08-03T15:16:00+00:00</published><updated>2022-08-03T15:16:00+00:00</updated><id>https://jqlynchien713.github.io/2022/08/03/coscup4</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/08/03/coscup4.html"><![CDATA[<h2 id="自動化部署-with-gitlab-runner">自動化部署 with Gitlab Runner</h2>
+
+<h3 id="registration">Registration</h3>
+
+<p>進入上一篇開好的 Manager EC2，並且此時的 EC2 應該已經安裝好 Gitlab Runner，這時候可以直接註冊我們的 Runner：<code class="language-plaintext highlighter-rouge">sudo gitlab-runner register</code>，下好指令後一共會問七個問題：</p>
+
+<ul>
+  <li>Gitlab instance URL</li>
+  <li>Registration Code
+    <ul>
+      <li>前兩個問題可以進入到 Gitlab project &gt; Settings &gt; CI/CD &gt; Runner 去查看設定細節，如附圖的左側</li>
+    </ul>
+  </li>
+  <li>Description for runner: docker
+    <ul>
+      <li>附圖右側白底黑字的部分</li>
+    </ul>
+  </li>
+  <li>Tags for runner(comma seperated): prod
+    <ul>
+      <li>附圖藍底部分，且這個 tag 是在<strong>後續指定 job 要哪個 runner 執行的依據</strong></li>
+    </ul>
+  </li>
+  <li>Optional maintenance note for runner: (optional)</li>
+  <li>Enter the executor: docker</li>
+  <li>Default Docker image: <code class="language-plaintext highlighter-rouge">tiangolo/docker-with-compose</code>
+    <ul>
+      <li>後續的 job 需要 compose 幫我們 build image，因此需要指定這個 image</li>
+    </ul>
+  </li>
+</ul>
+
+<p><img src="/assets/img/runner.jpg" alt="/assets/img/runner.jpg" /></p>
+
+<h3 id="gitlab-ciyml">.gitlab-ci.yml</h3>
+
+<p>這邊主要也是參考 <a href="https://dockerswarm.rocks/gitlab-ci/">dockerswarm.rocks</a> 的範例，以下簡單介紹一下他的設定內容：</p>
+
+<ul>
+  <li>Stage: 分為 build 與 deploy
+    <ul>
+      <li>Build: <code class="language-plaintext highlighter-rouge">docker-compose build --build-arg RAILS_MASTER_KEY=$RAILS_MASTER_KEY</code>
+  單純只有 build image，但因為我的 Dockerfile 包含了 Asset Precompile，因此需要帶入 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 做為參數</li>
+      <li>Deploy: <code class="language-plaintext highlighter-rouge">docker stack deploy -c docker-compose.yml [stack name]</code></li>
+    </ul>
+  </li>
+  <li>Only: 指定發生於 main branch</li>
+  <li>Tags: 用於指定執行的 runner</li>
+</ul>
+
+<h3 id="ec2-prerequisites">EC2 Prerequisites</h3>
+
+<p>因為 Traefik 與 Rails App 為獨立的兩個 Stack，為了簡化開發流程，這邊選擇手動進入 EC2 部署 Traefik</p>
+
+<blockquote>
+  <p>原本是另外開一個 traefik 分支做 Traefik 部署（並且指定 Traefik 部署的 job 只發生在該分支、只會發生一次），但在演講時有人反映不確定 traefik 分支部署後要不要合到 main 分支上、git graph 有點不明確，因此改為以公司實際部署的流程做介紹</p>
+
+</blockquote>
+
+<p>部署的步驟就像在實際部署流程提到的圖表一樣：</p>
+
+<ol>
+  <li>開啟一個 swarm：<code class="language-plaintext highlighter-rouge">docker swarm init --default-addr-pool 10.20.0.0/16</code>
+    <ul>
+      <li>因為 Docker 預設的 subnet range 與 EC2 相同，都是 <code class="language-plaintext highlighter-rouge">10.0.0.1</code>，因此這邊要特別指定不一樣的範圍， Swarm 才連的到外網</li>
+    </ul>
+  </li>
+  <li>開啟 traefik network：<code class="language-plaintext highlighter-rouge">docker network create --driver=overlay traefik-public</code></li>
+  <li>取得現在的 swarm manager node id：<code class="language-plaintext highlighter-rouge">export NODE_ID=$(docker info -f '')</code></li>
+  <li>指定 traefik 每次都 deploy 在同一個 node &amp; volume 上：<code class="language-plaintext highlighter-rouge">docker node update --label-add traefik-public.traefik-public-certificates=true $NODE_ID</code></li>
+  <li>部署 traefik：<code class="language-plaintext highlighter-rouge">docker stack deploy -c traefik.yml traefik</code></li>
+</ol>
+
+<h2 id="最後就是把-app-推上-gitlab-進行部署ㄌ">最後就是把 App 推上 GitLab 進行部署ㄌ！！！</h2>
+
+<h3 id="worker-node-加入-docker-swarm">Worker Node 加入 Docker Swarm</h3>
+
+<p>到這邊設定完 Manager 節點後，我們可以回去開 Worker Template，把加入 Swarm 的指令加回去：</p>
+
+<ol>
+  <li>先在 Manager 找回加入 Swarm 的指令：<code class="language-plaintext highlighter-rouge">docker swarm join-token worker</code></li>
+  <li>
+    <p>在 Worker Template 的 User Data 中加入剛剛找回的指令，於是最終的 User Data 會長下面這樣：</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="c">#!/bin/bash</span>
+ <span class="c"># Start docker daemon</span>
+ <span class="nb">sudo </span>service docker start
+ <span class="nb">sudo chown </span>ec2-user:docker /var/run/docker.sock
+
+ <span class="c"># Join swarm</span>
+ docker swarm <span class="nb">join</span> <span class="nt">--token</span> <span class="o">[</span>JOIN-TOKEN] <span class="o">[</span>IP-ADDRESS]:2377
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<hr />
+
+<p>到這邊主要的技術設定都結束了…..真的是超多內容要介紹：）</p>
+
+<p>下一篇會補充一些相關的議題討論，還有這次 COSCUP 演講的心得，希望我不要隔太久才把文章生出來：）</p>]]></content><author><name></name></author><category term="update" /><category term="COSCUP" /><category term="docker-swarm" /><category term="traefik" /><category term="deploy" /><summary type="html"><![CDATA[自動化部署 with Gitlab Runner Registration 進入上一篇開好的 Manager EC2，並且此時的 EC2 應該已經安裝好 Gitlab Runner，這時候可以直接註冊我們的 Runner：sudo gitlab-runner register，下好指令後一共會問七個問題： Gitlab instance URL Registration Code 前兩個問題可以進入到 Gitlab project &gt; Settings &gt; CI/CD &gt; Runner 去查看設定細節，如附圖的左側 Description for runner: docker 附圖右側白底黑字的部分 Tags for runner(comma seperated): prod 附圖藍底部分，且這個 tag 是在後續指定 job 要哪個 runner 執行的依據 Optional maintenance note for runner: (optional) Enter the executor: docker Default Docker image: tiangolo/docker-with-compose 後續的 job 需要 compose 幫我們 build image，因此需要指定這個 image .gitlab-ci.yml 這邊主要也是參考 dockerswarm.rocks 的範例，以下簡單介紹一下他的設定內容： Stage: 分為 build 與 deploy Build: docker-compose build --build-arg RAILS_MASTER_KEY=$RAILS_MASTER_KEY 單純只有 build image，但因為我的 Dockerfile 包含了 Asset Precompile，因此需要帶入 RAILS_MASTER_KEY 做為參數 Deploy: docker stack deploy -c docker-compose.yml [stack name] Only: 指定發生於 main branch Tags: 用於指定執行的 runner EC2 Prerequisites 因為 Traefik 與 Rails App 為獨立的兩個 Stack，為了簡化開發流程，這邊選擇手動進入 EC2 部署 Traefik 原本是另外開一個 traefik 分支做 Traefik 部署（並且指定 Traefik 部署的 job 只發生在該分支、只會發生一次），但在演講時有人反映不確定 traefik 分支部署後要不要合到 main 分支上、git graph 有點不明確，因此改為以公司實際部署的流程做介紹 部署的步驟就像在實際部署流程提到的圖表一樣： 開啟一個 swarm：docker swarm init --default-addr-pool 10.20.0.0/16 因為 Docker 預設的 subnet range 與 EC2 相同，都是 10.0.0.1，因此這邊要特別指定不一樣的範圍， Swarm 才連的到外網 開啟 traefik network：docker network create --driver=overlay traefik-public 取得現在的 swarm manager node id：export NODE_ID=$(docker info -f '') 指定 traefik 每次都 deploy 在同一個 node &amp; volume 上：docker node update --label-add traefik-public.traefik-public-certificates=true $NODE_ID 部署 traefik：docker stack deploy -c traefik.yml traefik 最後就是把 App 推上 GitLab 進行部署ㄌ！！！ Worker Node 加入 Docker Swarm 到這邊設定完 Manager 節點後，我們可以回去開 Worker Template，把加入 Swarm 的指令加回去： 先在 Manager 找回加入 Swarm 的指令：docker swarm join-token worker 在 Worker Template 的 User Data 中加入剛剛找回的指令，於是最終的 User Data 會長下面這樣： #!/bin/bash # Start docker daemon sudo service docker start sudo chown ec2-user:docker /var/run/docker.sock # Join swarm docker swarm join --token [JOIN-TOKEN] [IP-ADDRESS]:2377 到這邊主要的技術設定都結束了…..真的是超多內容要介紹：） 下一篇會補充一些相關的議題討論，還有這次 COSCUP 演講的心得，希望我不要隔太久才把文章生出來：）]]></summary></entry><entry><title type="html">Deploy Rails with Docker Swarm (3) - 實際部署流程：AWS</title><link href="https://jqlynchien713.github.io/2022/08/03/coscup3.html" rel="alternate" type="text/html" title="Deploy Rails with Docker Swarm (3) - 實際部署流程：AWS" /><published>2022-08-03T15:13:00+00:00</published><updated>2022-08-03T15:13:00+00:00</updated><id>https://jqlynchien713.github.io/2022/08/03/coscup3</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/08/03/coscup3.html"><![CDATA[<h2 id="aws-config">AWS Config</h2>
+
+<p>這個部分在 COSCUP 的演講提到的內容很少，主要是因為時間的關係，不過我覺得這部分的設定也蠻重要的，所以會在這邊全部列出來！</p>
+
+<h3 id="ami--template-比較">AMI &amp; Template 比較</h3>
+
+<p>為了簡化開 EC2 的程序，我這邊會用到 AMI 與 Template 這兩個服務，先稍微比較一下他們的定義：</p>
+
+<ul>
+  <li>AMI (software only)：映像檔服務，保留 EC2 上的所有安裝套件</li>
+  <li>Template (hardware only)：EC2 模板，保留一樣的 EC2 啟動精靈（包含硬體設定與 User data）</li>
+</ul>
+
+<h3 id="架構簡介">架構簡介</h3>
+
+<p>根據上一篇介紹的 Swarm 架構，我們會有兩種節點，分別需要的套件與設定對應如下：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Node Type</th>
+      <th>Manager</th>
+      <th>Worker</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1. AMI</td>
+      <td>Docker, Gitlab Runner</td>
+      <td>Docker</td>
+    </tr>
+    <tr>
+      <td>2. Template</td>
+      <td>Start Docker Engine<br />Specify Security Group<br />SSM &amp; Route53 IAM role</td>
+      <td>Start Docker Engine<br />Specify Security Group</td>
+    </tr>
+  </tbody>
+</table>
+
+<ul>
+  <li>Manager node：需要安裝 Gitlab Runner 讓我們自動化操控這些節點，並且需要多給予 SSM &amp; Route53 權限，分別讓我們可以進入 EC2 下指令、與操作 DNS 相關的設定</li>
+  <li>Security Group：指定 worker &amp; manager 使用同個 SG，並且在這個 SG 裡開啟「所有 port 允許任何來自此 SG 的 inboud」，不過這邊開啟所有 port 的權限只是為了方便所設定，實際上還是只能指定 Docker Swarm 裡溝通用的那幾個 port，可以參考<a href="https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts:~:text=%3A%20192.168.99.100.-,Open%20protocols%20and%20ports%20between%20the%20hosts,-%F0%9F%94%97">官方文件</a>上的說明。除了這個規則以外，記得要開放 http &amp; https 的 port！</li>
+</ul>
+
+<h3 id="ec2-settings">EC2 Settings</h3>
+
+<p>了解節點需求差異後，我在實作上的操作步驟如下：</p>
+
+<ol>
+  <li>開啟一個 EC2，安裝 docker</li>
+  <li>製作 worker AMI</li>
+  <li>回到原有的 EC2，安裝 Gitlab Runner</li>
+  <li>製作 manager AMI</li>
+  <li>開啟 AWS EC2 Template，新增一個以 worker AMI 為基礎的 template
+    <ol>
+      <li>
+        <p>設定 Security Group，如圖中的第一列，來源為該 SG 的 ID：</p>
+
+        <p><img src="/assets/img/sg.png" alt="/assets/img/sg.png" /></p>
+      </li>
+      <li>
+        <p>在 User Data 加上要自動執行的指令：</p>
+
+        <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="c">#!/bin/bash</span>
+ <span class="c"># Start docker daemon</span>
+ <span class="nb">sudo </span>service docker start
+ <span class="nb">sudo chown </span>ec2-user:docker /var/run/docker.sock
+</code></pre></div>        </div>
+      </li>
+    </ol>
+  </li>
+  <li>開啟 AWS EC2 Template，新增一個以 worker AMI 為基礎的 template
+    <ol>
+      <li>給予具有 SSM &amp; Route53 權限的 IAM role</li>
+      <li>設定 Security Group（同 worker template）</li>
+      <li>在 User Data 加上自動開啟 docker daemon（同 worker template）</li>
+    </ol>
+  </li>
+</ol>
+
+<h3 id="route53-settings">Route53 Settings</h3>
+
+<p>這時候可以從 Manager Template 開啟一個 EC2，去到 Route53 中的托管區域（Hosted Zone），把這個 EC2 的 public IP addr 設定 A record</p>
+
+<p><img src="/assets/img/route53.png" alt="/assets/img/route53.png" /></p>]]></content><author><name></name></author><category term="update" /><category term="COSCUP" /><category term="docker-swarm" /><category term="traefik" /><category term="deploy" /><summary type="html"><![CDATA[AWS Config 這個部分在 COSCUP 的演講提到的內容很少，主要是因為時間的關係，不過我覺得這部分的設定也蠻重要的，所以會在這邊全部列出來！ AMI &amp; Template 比較 為了簡化開 EC2 的程序，我這邊會用到 AMI 與 Template 這兩個服務，先稍微比較一下他們的定義： AMI (software only)：映像檔服務，保留 EC2 上的所有安裝套件 Template (hardware only)：EC2 模板，保留一樣的 EC2 啟動精靈（包含硬體設定與 User data） 架構簡介 根據上一篇介紹的 Swarm 架構，我們會有兩種節點，分別需要的套件與設定對應如下： Node Type Manager Worker 1. AMI Docker, Gitlab Runner Docker 2. Template Start Docker EngineSpecify Security GroupSSM &amp; Route53 IAM role Start Docker EngineSpecify Security Group Manager node：需要安裝 Gitlab Runner 讓我們自動化操控這些節點，並且需要多給予 SSM &amp; Route53 權限，分別讓我們可以進入 EC2 下指令、與操作 DNS 相關的設定 Security Group：指定 worker &amp; manager 使用同個 SG，並且在這個 SG 裡開啟「所有 port 允許任何來自此 SG 的 inboud」，不過這邊開啟所有 port 的權限只是為了方便所設定，實際上還是只能指定 Docker Swarm 裡溝通用的那幾個 port，可以參考官方文件上的說明。除了這個規則以外，記得要開放 http &amp; https 的 port！ EC2 Settings 了解節點需求差異後，我在實作上的操作步驟如下： 開啟一個 EC2，安裝 docker 製作 worker AMI 回到原有的 EC2，安裝 Gitlab Runner 製作 manager AMI 開啟 AWS EC2 Template，新增一個以 worker AMI 為基礎的 template 設定 Security Group，如圖中的第一列，來源為該 SG 的 ID： 在 User Data 加上要自動執行的指令： #!/bin/bash # Start docker daemon sudo service docker start sudo chown ec2-user:docker /var/run/docker.sock 開啟 AWS EC2 Template，新增一個以 worker AMI 為基礎的 template 給予具有 SSM &amp; Route53 權限的 IAM role 設定 Security Group（同 worker template） 在 User Data 加上自動開啟 docker daemon（同 worker template） Route53 Settings 這時候可以從 Manager Template 開啟一個 EC2，去到 Route53 中的托管區域（Hosted Zone），把這個 EC2 的 public IP addr 設定 A record]]></summary></entry><entry><title type="html">Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp;amp; Rails</title><link href="https://jqlynchien713.github.io/2022/08/03/coscup2.html" rel="alternate" type="text/html" title="Deploy Rails with Docker Swarm (2) - 流程介紹與設定 Traefik &amp;amp; Rails" /><published>2022-08-03T14:33:00+00:00</published><updated>2022-08-03T14:33:00+00:00</updated><id>https://jqlynchien713.github.io/2022/08/03/coscup2</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/08/03/coscup2.html"><![CDATA[<p>接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分：</p>
+
+<ol>
+  <li>設定 Rails &amp; Traefik</li>
+  <li>設定 AWS</li>
+  <li>設定 Gitlab runner 自動化部署</li>
+</ol>
+
+<p>因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章<br />（不知不覺就變成連載系列了🫠）</p>
+
+<h2 id="部署流程">部署流程</h2>
+
+<h3 id="實作流程">實作流程</h3>
+
+<ul>
+  <li>本地端進行部署
+    <ul>
+      <li>開啟 rails production server</li>
+      <li>確認本地端 Docker compose build/up 皆可順利執行</li>
+    </ul>
+  </li>
+  <li>手動 ssh 進入 EC2 部署
+    <ul>
+      <li>將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明</li>
+    </ul>
+  </li>
+  <li>利用 Gitlab runner 自動部署
+    <ul>
+      <li>將前一步的所有設定、部署指令自動化</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="實際部署流程">實際部署流程</h3>
+
+<p>這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹：</p>
+
+<ol>
+  <li>設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去）</li>
+  <li>設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務</li>
+  <li>設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去</li>
+  <li>自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（<code class="language-plaintext highlighter-rouge">.gitlab-ci.yml</code>），而腳本的內容則是<strong>實際在部署時需要對機器本身下的設定</strong>，內容如下：
+    <ol>
+      <li>開啟 Docker Swarm</li>
+      <li>創建 <code class="language-plaintext highlighter-rouge">traefik-public</code> 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy</li>
+      <li>指定每次 Traefik 更新時固定使用同個節點</li>
+      <li>使用 docker stack 部署 Traefik</li>
+      <li>部署 Rails App</li>
+    </ol>
+
+    <p id="order1"><img src="/assets/img/order1.jpg" alt="order1" /></p>
+
+    <p>實際部署 Docker Swarm 的流程</p>
+  </li>
+</ol>
+
+<h2 id="rails--traefik-service">Rails &amp; Traefik Service</h2>
+
+<h3 id="traefik-service-settings">Traefik Service Settings</h3>
+
+<p>Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 <strong>Traefik 會有一個 <code class="language-plaintext highlighter-rouge">traefik.yml</code> 用於部署 traefik stack</strong>，而 <strong>Rails App 則是使用原始的 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 去部署 task stack</strong>（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 <code class="language-plaintext highlighter-rouge">task</code>）</p>
+
+<p>首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 <a href="https://dockerswarm.rocks/traefik/">dockerswarm.rocks</a> 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔  <a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/traefik.yml">traefik.yml / Task-Manager-Ruby · GitLab</a>）：</p>
+
+<ul>
+  <li>Network：需要新增一個叫 <code class="language-plaintext highlighter-rouge">traefik-public</code> 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通</li>
+  <li>Volumes：新增一個 <code class="language-plaintext highlighter-rouge">traefik-public-certificate</code> 的 volume，用於存放已經申請過的憑證</li>
+  <li>Service：分為兩部分需要注意，Command 與 Deploy Label
+    <ul>
+      <li>Command：Traefik 的<strong>基本設定</strong>，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等</li>
+      <li>Deploy Label：為了要開啟 Traefik Dashboard 而設定的 <strong>reverse proxy routing</strong>，主要有下列幾點要設定：
+        <ul>
+          <li>開啟 Traefik 並加入 <code class="language-plaintext highlighter-rouge">traefik-public</code> Network</li>
+          <li>Dashboard 登入帳密</li>
+          <li>Http/Https host</li>
+          <li>Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https</li>
+          <li><a href="#LB">Load balancer</a> port：當有目的地是 host 的請求，Traefik 需要將其導向的 port</li>
+          <li>設定 <a href="#wildcard">wildcard</a> 驗證過的 domain</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<p>到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。</p>
+
+<h3 id="rails-appapplication-service">Rails App(Application) Service</h3>
+
+<p>接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。</p>
+
+<p>首先必須生成一組 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code>，因為 Rails 在 Production 環境中需要有 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定</p>
+
+<h4 id="dockerfile">Dockerfile</h4>
+
+<p>這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（<code class="language-plaintext highlighter-rouge">config/boxing.rb</code>）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）：</p>
+
+<ul>
+  <li>Source Code Root</li>
+  <li>Ignore File</li>
+  <li><strong>Extra Packages: Node.js &amp; Python</strong></li>
+  <li>Revision Information</li>
+  <li>Sentry Support</li>
+  <li><strong>Asset Precompile: True</strong></li>
+  <li>Health Check</li>
+</ul>
+
+<blockquote>
+  <p>補充：<strong><a href="https://github.com/elct9620/openbox">OpenBox</a></strong> - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint</p>
+
+</blockquote>
+
+<h4 id="docker-compose-file">Docker-compose file</h4>
+
+<p>與在本地端設定的 <code class="language-plaintext highlighter-rouge">docker-compose.yml</code> 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定：</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code>：剛剛生成的 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 <code class="language-plaintext highlighter-rouge">RAILS_MASTER_KEY</code> 放在 .env、或者設定為 app service 的 environment var，可以參考<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/docker-compose-local.yml">本地端的 docker-compose</a> Line 55）</li>
+  <li><code class="language-plaintext highlighter-rouge">DATABSE_URL</code>：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 <code class="language-plaintext highlighter-rouge">postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...]</code></li>
+</ul>
+
+<p>做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/docker-compose.yml">這個檔案</a>類似。</p>
+
+<hr />
+<h3 id="補充">補充</h3>
+<h4 id="LB">Load Balancer Port 設定</h4>
+<p>假設今天我們的 domain 是 <code class="language-plaintext highlighter-rouge">abc.dev</code> 有用戶請求了 <code class="language-plaintext highlighter-rouge">traefik.abc.dev(aka 我們的 host name)</code>，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080</p>
+
+<h4 id="wildcard">Wildcard 相關知識</h4>
+<p>相關設定的補充知識，這邊需要參考我已經寫好的<a href="https://gitlab.com/jqlynchien713/task-manager-ruby/-/blob/main/traefik.yml">設定檔</a></p>
+
+<ul>
+  <li>Wildcard：<a href="https://letsencrypt.org/zh-tw/docs/challenge-types/#dns-01-%E8%80%83%E9%A9%97">ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org)</a>
+    <ul>
+      <li>可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證</li>
+      <li>屬於 Let’s Encrypt 發放的其中一種憑證格式</li>
+    </ul>
+  </li>
+  <li>給予 route53 權限的原因
+    <ul>
+      <li>因為設定 DNS challenge 與 DNS Challenge Provider 為 route53</li>
+      <li>DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host</li>
+      <li>Route53 提供自動更新憑證的 API</li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+<p>第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分）</p>
+
+<p>希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（</p>]]></content><author><name></name></author><category term="update" /><category term="COSCUP" /><category term="docker-swarm" /><category term="traefik" /><category term="deploy" /><summary type="html"><![CDATA[接下來讓我們進到實際操作的部分！這篇主要會先介紹一下後續的文章架構，主要是分成以下三個部分： 設定 Rails &amp; Traefik 設定 AWS 設定 Gitlab runner 自動化部署 因為篇幅的關係，這篇文會先介紹第一部分，後面兩部分也會再另外發新的文章（不知不覺就變成連載系列了🫠） 部署流程 實作流程 本地端進行部署 開啟 rails production server 確認本地端 Docker compose build/up 皆可順利執行 手動 ssh 進入 EC2 部署 將 Traefik 與 Docker Swarm 直接部署在 EC2 裡，詳細的流程會在下一部分的圖裡說明 利用 Gitlab runner 自動部署 將前一步的所有設定、部署指令自動化 實際部署流程 這邊要講的是完整的部署流程上執行了哪些設定，後續的介紹也會將以下四點的順序作為主要架構進行介紹： 設定 Traefik Service：依照上一篇提到的 Traefik 特性，先設定 reverse proxy（再把 app 掛上去） 設定 Rails App Service：基本上等於在本地端部署的步驟，也就是確認 Docker compose build/up 可以順利開啟服務 設定 EC2 與 Route53：在確認設定檔大致完成後，設定並開啟 EC2，將剛剛設定的服務部署上去 自動化部署 with Gitlab Runner：註冊並撰寫 runner 的腳本（.gitlab-ci.yml），而腳本的內容則是實際在部署時需要對機器本身下的設定，內容如下： 開啟 Docker Swarm 創建 traefik-public 的公開 Network，讓 App service 可以使用 traefik 來做 reverse proxy 指定每次 Traefik 更新時固定使用同個節點 使用 docker stack 部署 Traefik 部署 Rails App 實際部署 Docker Swarm 的流程 Rails &amp; Traefik Service Traefik Service Settings Traefik 與 Rails App 其實是兩個獨立的服務，因此這邊會將 Traefik 與 Rails App 的設定檔分開，也就是 Traefik 會有一個 traefik.yml 用於部署 traefik stack，而 Rails App 則是使用原始的 docker-compose.yml 去部署 task stack（這邊的 Rails App 叫做 Task-Manager，因此 stack name 取為 task） 首先在 traefik.yml 中的設定會與一般的 docker compose file 架構相同，這邊我是參考 dockerswarm.rocks 裡提供的 Traefik 設定範例進行設定，不過我們會需要特別設定以下幾點（這部分也可以直接參考我寫好的設定檔 traefik.yml / Task-Manager-Ruby · GitLab）： Network：需要新增一個叫 traefik-public 的網路，並且設定為 external，好讓 Rails App 可以透過這個網路與 Traefik 溝通 Volumes：新增一個 traefik-public-certificate 的 volume，用於存放已經申請過的憑證 Service：分為兩部分需要注意，Command 與 Deploy Label Command：Traefik 的基本設定，需要指定 Docker provider、開啟 Swarm mode，憑證的申請、儲存位置，以及 DNS Challenge 等等 Deploy Label：為了要開啟 Traefik Dashboard 而設定的 reverse proxy routing，主要有下列幾點要設定： 開啟 Traefik 並加入 traefik-public Network Dashboard 登入帳密 Http/Https host Redirect middleware：當用戶使用 Http 發送請求，自動轉為 Https Load balancer port：當有目的地是 host 的請求，Traefik 需要將其導向的 port 設定 wildcard 驗證過的 domain 到這一步基本上 Traefik 本身已經設定完畢，可以先進 EC2 裡開好 Traefik stack 來檢查是否能正確開啟。 Rails App(Application) Service 接下來要說明的是 Rails App 要怎麼設定，當然這個部署架構不只限定於 Rails App，不過這個步驟可能要依照使用的語言或框架而改動。 首先必須生成一組 RAILS_MASTER_KEY，因為 Rails 在 Production 環境中需要有 RAILS_MASTER_KEY 才能啟動，確定 production server 可正常開啟後，可以來準備我們的 Dockerfile 與 Docker-compose file 來進行 task stack 的設定 Dockerfile 這部分我使用的是 https://github.com/elct9620/boxing 這個 gem 來幫我自動生成，他會依據專案中的 Gemfile 以及 boxing 本身的設定檔（config/boxing.rb）來自動生成 Dockerfile。另外這個 Gem 的作者（也就是蒼時大大）有特別研究如何生成最小化的 Docker image，因此自動生成的映像檔大約只會有（據他本人所說） 100 MB，下面列出可以另外設定的選項（粗體為我這次有採用的設定）： Source Code Root Ignore File Extra Packages: Node.js &amp; Python Revision Information Sentry Support Asset Precompile: True Health Check 補充：OpenBox - Auto generate entrypoint settings，如果將 Boxing 與 OpenBox 同時採用的話，Boxing 生成的 Dockerfile 會將 Entrypoint 自動指定為 OpenBox 生成的 Entrypoint Docker-compose file 與在本地端設定的 docker-compose.yml 基本上一樣，我在這邊是只有設定三個 service(app/redis/postgres)，Network 只有 net 讓三個 service 共享，並加上下面兩項設定： RAILS_MASTER_KEY：剛剛生成的 RAILS_MASTER_KEY 可以先放到 Gitlab 中設定為 CI variable（如果要跑本地測試的話可以將 RAILS_MASTER_KEY 放在 .env、或者設定為 app service 的 environment var，可以參考本地端的 docker-compose Line 55） DATABSE_URL：在 app service 的 environment variable 要特別指定資料庫的路徑，才能正確連線到 postgres service，並且要注意格式為 postgresql://[user[:password]@][netloc][:port][/dbname][?param1=value1&amp;...] 做完基本的設定後，在把 Traefik 相關的 routing rules 加到 deploy label 上。這部分和在設定 Traefik 的 deploy labels 一樣，設定完畢後會像這個檔案類似。 補充 Load Balancer Port 設定 假設今天我們的 domain 是 abc.dev 有用戶請求了 traefik.abc.dev(aka 我們的 host name)，而我們的 Traefik Dashboard 開在 8080 port，則 Traefik 會將這個 request 導向 8080 Wildcard 相關知識 相關設定的補充知識，這邊需要參考我已經寫好的設定檔 Wildcard：ACME 驗證方式 - Let’s Encrypt - 免費的 SSL/TLS 憑證 (letsencrypt.org) 可以直接申請某個 domain 的憑證，讓整個 domain 下的所有 host 都可以使用同一張憑證（domain.sans 部分），不需特地為所有 host 個別申請憑證 屬於 Let’s Encrypt 發放的其中一種憑證格式 給予 route53 權限的原因 因為設定 DNS challenge 與 DNS Challenge Provider 為 route53 DNS challenge：需要有 route53 的權限才能動態驗證 *.domain 下的所有 host Route53 提供自動更新憑證的 API 第一部分就到這邊結束，其實做到這個步驟應該就能在本地端進行部署（僅限 Rails 部分） 希望大家與 Docker 可以好好相處，他真的是個好用ㄉ酷東西（]]></summary></entry><entry><title type="html">Deploy Rails with Docker Swarm (1) - 工具介紹</title><link href="https://jqlynchien713.github.io/2022/07/30/coscup1.html" rel="alternate" type="text/html" title="Deploy Rails with Docker Swarm (1) - 工具介紹" /><published>2022-07-30T10:19:00+00:00</published><updated>2022-07-30T10:19:00+00:00</updated><id>https://jqlynchien713.github.io/2022/07/30/coscup1</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/07/30/coscup1.html"><![CDATA[<p>COSCUP 安全下莊！（大概）</p>
+
+<p>因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是<strong>工具介紹</strong>、<strong>實作流程</strong>、<strong>其他議題</strong>（就是實際簡報的 mapping），這邊也附上實際報告的<a href="https://docs.google.com/presentation/d/1c1ip0DacaPZ8jKVLdtDPkB1ud3qiH44mp8TscCdTbD4/edit?usp=sharing">簡報</a>以及我實作的 <a href="https://gitlab.com/jqlynchien713/task-manager-ruby">Repository</a>，接下來就進入正題ㄅ！</p>
+
+<h2 id="docker-swarm">Docker Swarm</h2>
+
+<h3 id="structure">Structure</h3>
+
+<p>Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。</p>
+
+<p>當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。</p>
+
+<p><img src="/assets/img/swarm.png" alt="Work.jpg" /></p>
+
+<h3 id="scalability--availability-feature">Scalability &amp; Availability Feature</h3>
+
+<p>首先來比較一下這兩項特性定義上的差異：</p>
+
+<ul>
+  <li>Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減</li>
+  <li>Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance）</li>
+</ul>
+
+<p>Docker Swarm 達到這兩項特性的方法如下：</p>
+
+<ol>
+  <li>Scalability：自動在空間足夠的 worker 上開啟新的 container</li>
+  <li>Availability：以更新 app、降低 downtime 為例
+    <ol>
+      <li>當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上</li>
+      <li>漸進式取代所有舊版的 app container</li>
+    </ol>
+  </li>
+</ol>
+
+<h3 id="deploy-tools-stack-vs-compose">Deploy Tools: Stack vs Compose</h3>
+
+<p>當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同：</p>
+
+<ol>
+  <li>都使用 compose format 進行 deploy，但是 stack 只支援版本三以上</li>
+  <li>Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作</li>
+  <li>Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果</li>
+  <li>Compose 相較之下更適合用於開發環境</li>
+</ol>
+
+<h3 id="名詞解釋-service-vs-task">名詞解釋: Service vs Task</h3>
+
+<ul>
+  <li>Task：各個<strong>實體機</strong>上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡</li>
+  <li>Service：一個 image 所提供的服務，like: app/redis/postgres</li>
+  <li>所有 service 的總和稱為 stack</li>
+</ul>
+
+<p><img src="https://docs.docker.com/engine/swarm/images/services-diagram.png" alt="https://docs.docker.com/engine/swarm/images/services-diagram.png" /></p>
+
+<h2 id="traefik">Traefik</h2>
+
+<p>Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點：</p>
+
+<ol>
+  <li>與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label  下面</li>
+  <li>自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序</li>
+  <li>無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上</li>
+  <li>有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去</li>
+</ol>
+
+<h2 id="aws">AWS</h2>
+
+<h3 id="ec2">EC2</h3>
+
+<p>就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具：</p>
+
+<ul>
+  <li>AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。</li>
+  <li>Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本）</li>
+</ul>
+
+<h3 id="route53路由服務">Route53：路由服務</h3>
+
+<ul>
+  <li>會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address）</li>
+  <li>可以創建許多型態的 record，定義 sub-domain</li>
+</ul>]]></content><author><name></name></author><category term="update" /><category term="COSCUP" /><category term="docker-swarm" /><category term="traefik" /><category term="deploy" /><summary type="html"><![CDATA[COSCUP 安全下莊！（大概） 因為終於結束ㄌ，想說來把我的簡報內容轉換成部落格的實體紀錄，目前預計會發個三篇，分別是工具介紹、實作流程、其他議題（就是實際簡報的 mapping），這邊也附上實際報告的簡報以及我實作的 Repository，接下來就進入正題ㄅ！ Docker Swarm Structure Docker Swarm 的結構可以視為一個 Cluster（叢集），叢集里會有一到多個 Master/Manager Node 來控制我們的節點，另外也會有 0 到多個的 Worker node，而這邊紫色的框框都是一台機器，每台機器上都會有執行中的 docker daemon。 當我們要進行 deploy 的動作時，會先透過 Docker Clinent 向 Manager node 發起 deploy request 給 Manager node 的 scheduler/discovery service，透過與 worker node 上的 docker daemon 聯繫來控制這些工作節點。 Scalability &amp; Availability Feature 首先來比較一下這兩項特性定義上的差異： Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減 Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance） Docker Swarm 達到這兩項特性的方法如下： Scalability：自動在空間足夠的 worker 上開啟新的 container Availability：以更新 app、降低 downtime 為例 當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上 漸進式取代所有舊版的 app container Deploy Tools: Stack vs Compose 當我們需要使用 docker swarm 這個架構時，必須透過 Docker stack 這項工具進行部署的動作。Stack 可以說是進化版的 Compose，因為基本上 stack 的設定檔格式就是 docker-compose.yml，以下是這兩個工具之間的異同： 都使用 compose format 進行 deploy，但是 stack 只支援版本三以上 Stack 無法 build image，因此只能使用現有的映像檔，或者使用 compose 來幫我們做 build image 的動作 Compose 只能做到單一機器上的執行，但 stack 搭配了 docker swarm 的架構，可以透過 scheduler 與 worker 的 docker daemon 進行聯繫，因此可以做到多台機器之間的操作，達到 cluster 的效果 Compose 相較之下更適合用於開發環境 名詞解釋: Service vs Task Task：各個實體機上須要執行的人物；當 service 指定的 replica 為 3 時，代表會有 3 個 tasks 分別執行在 3 個 container 裡 Service：一個 image 所提供的服務，like: app/redis/postgres 所有 service 的總和稱為 stack Traefik Traefik 最直觀的解釋就是一個 reverse proxy 的工具，也可以拿來做 load balancer 使用。那他的好處有以下這幾點： 與 Docker 高度整合：可以直接在 docker compose 定義 service 時，直接把 routing rules 定義在 deploy label 下面 自動向 Let’s Encrypt 申請 HTTPS 憑證，降低申請憑證的繁複程序 無需重啟：當我們有新的 app 希望可以用 Traefik 做 reverse proxy 時，不需要重新啟動 Traefik，他就能自動幫我們把新的 host request 導向新的 application 上 有別於以往設定 reverse proxy 時，都需要先設定好 app 再去設定 reverse proxy 的路由，Traefik 是先把他自己的服務開好後，再把我們要開放的 app 掛上去 AWS EC2 就是一台虛擬機，必須存在於某個 VPC 的子網路下（可直接選擇 AWS 提供給免費帳戶的預設 VPC）。同時也為了要簡化後續的實作流程，這邊也會使用到 AMI 與 EC2 template 來加速我們開啟機器的步驟，以下簡單介紹一下這兩項工具： AMI (software only)：映像檔服務，可以從我們已經開好並安裝一些套件之後的 EC2 製成。因為是映像檔的關係，建好 AMI 後會幫我們保留該 EC2 上已經安裝好的套件。 Template (hardware only)：EC2 模板，協助開啟同樣的 EC2 啟動精靈，內容包含了硬體的選擇、VPC/Subnet 設定、IAM 角色的給定，以及 user data 的內容（啟動後要執行的腳本） Route53：路由服務 會為擁有的 Domain 產生 Hosted Zone 的 Name Server，管理 DNS routing（domain 要對應到哪個 IP address） 可以創建許多型態的 record，定義 sub-domain]]></summary></entry><entry><title type="html">VScode ssh to Windows server 遠端寫扣！</title><link href="https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html" rel="alternate" type="text/html" title="VScode ssh to Windows server 遠端寫扣！" /><published>2022-06-22T13:42:00+00:00</published><updated>2022-06-22T13:42:00+00:00</updated><id>https://jqlynchien713.github.io/2022/06/22/vscode-ssh</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/06/22/vscode-ssh.html"><![CDATA[<p>雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: <a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh">Remote - SSH</a>，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！</p>
+
+<h2 id="windows-ssh-server-configuration">Windows SSH Server Configuration</h2>
+
+<p>首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺</p>
+
+<h3 id="step-1-安裝-ssh-server">Step 1 安裝 SSH server</h3>
+
+<p>首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」</p>
+
+<p><img src="/assets/img/ssh1.png" alt="" />
+<img src="/assets/img/ssh2.png" alt="" /></p>
+
+<h3 id="step-2-執行-ssh-server">Step 2 執行 SSH server</h3>
+
+<p>接下來要以<strong>系統管理員</strong>開啟 Windows PowerShell，並輸入以下指令來開啟 server：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Start-Service sshd  # 開啟 SSH server
+Set-Service -Name sshd -StartupType 'Automatic'  # 開機時自動啟用，擔心資安問題也可以把 'Automatic' 改成 'Manual'
+</code></pre></div></div>
+<p>設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛</p>
+
+<h2 id="vscode-plugin-remote---ssh">VScode plugin: Remote - SSH</h2>
+
+<p>安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛</p>
+
+<p><img src="/assets/img/ssh-vscode.png" alt="" /></p>
+
+<p>安裝完後會發現左下角有一個藍色的框框可以點
+<img src="/assets/img/ssh-btn.png" alt="" /></p>
+
+<p>點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip
+<img src="/assets/img/ssh-host.png" alt="" /></p>
+
+<p>第一次使用時需要先新增主機，按照對話筐的提示（<code class="language-plaintext highlighter-rouge">ssh user@hostname</code>）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！</p>
+<blockquote>
+  <p>註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼</p>
+</blockquote>
+
+<p><img src="/assets/img/ssh-new.png" alt="" /></p>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li>大神學長的網誌：<a href="https://www.wongwonggoods.com/draft_notes/windows/windows-ssh/">【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記</a></li>
+  <li>Remote - SSH plugin 本人的連結：<a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh">Remote - SSH</a></li>
+</ul>]]></content><author><name></name></author><category term="update" /><category term="ssh" /><category term="config" /><category term="vscode" /><summary type="html"><![CDATA[雖然我已經是 Vim 的信徒ㄌ，但總不可能用 Vim 寫 Jupyter Notebook 吧！開好 Jupyter Notebook Server 之後寫了大概一個月，真的覺得預設的框框有夠窄有夠難寫，改成用 Jupyter Lab 寫了一個禮拜之後又覺得那個編輯器的設定真的莫名其妙（舉例：在輸入搜尋欄後按 enter，cursor 會直接 focus 在第二個結果，也就是說當你想再按一次 enter 跳到下一個結果時，第一個結果的字元直接變成換行）。於是！大概查了一下，發現 VScode 有個酷外掛叫做 Remote - SSH名稱: Remote - SSH，讓我們可以直接連到遠端的電腦做開發！不過最大的問題是要開啟遠端主機的 SSH server，也因為有觀眾敲碗所以想說來記錄一下好ㄌ！ Windows SSH Server Configuration 首先要感謝大學時的研究所學長嗡嗡，這段基本上是照著他的網誌做設定ㄉ🥺 Step 1 安裝 SSH server 首先要進到設定 &gt; 應用程式與功能 &gt; 選用功能，檢查有沒有安裝 SSH server，如果沒有的話可以點選第二張圖上方的「新增功能」，搜尋並安裝「OpenSSH 伺服器」 Step 2 執行 SSH server 接下來要以系統管理員開啟 Windows PowerShell，並輸入以下指令來開啟 server： Start-Service sshd # 開啟 SSH server Set-Service -Name sshd -StartupType 'Automatic' # 開機時自動啟用，擔心資安問題也可以把 'Automatic' 改成 'Manual' 設定好遠端主機後，可以回到現在用的電腦上，先開啟 VScode 並安裝官方的 Remote 外掛 VScode plugin: Remote - SSH 安裝完遠端主機的 SSH server 之後，回到現在使用的電腦上，安裝 VScode 的 Remote - SSH 外掛 安裝完後會發現左下角有一個藍色的框框可以點 點選之後會跳出一個對話筐，輸入你的遠端主機 hostname/ip 第一次使用時需要先新增主機，按照對話筐的提示（ssh user@hostname）輸入、並輸入該使用者的密碼後，就可以連線到遠端主機了！ 註：這邊的 user 是指遠端主機的使用者，密碼則是登入該位使用者的密碼 Reference 大神學長的網誌：【Windows】windows 開啟 ssh 的方式｜嗡嗡的隨手筆記 Remote - SSH plugin 本人的連結：Remote - SSH]]></summary></entry><entry><title type="html">在 EC2 中開啟 Docker Swarm 群集</title><link href="https://jqlynchien713.github.io/2022/06/22/docker-swarm-intro.html" rel="alternate" type="text/html" title="在 EC2 中開啟 Docker Swarm 群集" /><published>2022-06-22T12:38:00+00:00</published><updated>2022-06-22T12:38:00+00:00</updated><id>https://jqlynchien713.github.io/2022/06/22/docker-swarm-intro</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/06/22/docker-swarm-intro.html"><![CDATA[<h2 id="docker-swarm-introduction">Docker Swarm Introduction</h2>
+
+<ul>
+  <li>Ref: <a href="https://www.youtube.com/watch?v=_riEfxHoUh0&amp;list=PLzZ2RIhyht-PTxy-l5H4iwtCPmNHJu8wD&amp;index=29">(32) Docker Swarm Introduction - Video 28 - YouTube</a></li>
+</ul>
+
+<h3 id="structure">Structure</h3>
+
+<p><img src="/assets/img/swarm.png" alt="Work.jpg" /></p>
+
+<h3 id="scalability--availability">Scalability &amp; Availability</h3>
+
+<p><strong>Differences/Definitions of Scalability &amp; Availability</strong></p>
+
+<ul>
+  <li>Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減</li>
+  <li>Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance）</li>
+  <li>Docker Swarm Features
+    <ol>
+      <li>Scalability：自動在空間足夠的 worker 上開啟新的 container</li>
+      <li>Availability：以更新 app、降低 downtime 為例
+        <ol>
+          <li>當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上</li>
+          <li>漸進式取代所有舊版的 app container</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+</ul>
+
+<h3 id="service-vs-task">Service vs Task</h3>
+<p>根據 document 的寫法，service 與 task 的差別如下圖：
+<img src="https://docs.docker.com/engine/swarm/images/services-diagram.png" alt="https://docs.docker.com/engine/swarm/images/services-diagram.png" />
+兩者的區別在於，service 是由 manager 控管的 application，而 task 則是根據 manager 的控制、各個 worker 被指派的任務。</p>
+
+<h3 id="stack-vs-compose">Stack vs Compose</h3>
+
+<p>基本上 stack 可以視為升級版的 compose，並且 stack 的設定檔也可以拿 docker-compose file 來執行（只要是 yml 都行）</p>
+
+<h2 id="swarm-mode-implementation">Swarm Mode Implementation</h2>
+
+<ul>
+  <li>Ref: <a href="https://zhuanlan.zhihu.com/p/79694462">Swarm与Docker的整合——Swarm mode - 知乎 (zhihu.com)</a></li>
+  <li><a href="https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts">Getting started with swarm mode, Docker Documentation</a> → port prerequistive to set up security group</li>
+  <li>Run docker daemon on EC2(amazon linux): <a href="https://phoenixnap.com/kb/cannot-connect-to-the-docker-daemon-error#:~:text=Method%202%3A%20Assign%20Ownership%20to%20the%20Docker%20Unix%20Socket">Method 2: Assign Ownership to the Docker Unix Socket</a></li>
+</ul>
+
+<h3 id="ec2-特殊設定">EC2 特殊設定</h3>
+
+<ul>
+  <li>SSM53: session manager <a href="/2022/06/05/aws-ssh.html">參考前一篇文章</a></li>
+  <li>Security Group Inbounds
+    <ul>
+      <li>Allow TCP port 6000-9000 from my IP</li>
+      <li>Allow all TCP inbound from same security group，好處是可以不用特別設定 <a href="https://docs.docker.com/engine/swarm/swarm-tutorial/#open-protocols-and-ports-between-the-hosts">docker swarm 指定的傳輸 port</a></li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="操作步驟">操作步驟</h3>
+
+<ol>
+  <li>開三台 EC2，其中一台作為 manager、另外兩台作為 worker</li>
+  <li>安裝 docker 並執行 docker daemon
+    <ol>
+      <li>開啟 docker engine：<code class="language-plaintext highlighter-rouge">sudo service docker start</code></li>
+      <li><code class="language-plaintext highlighter-rouge">sudo chown ec2-user:docker /var/run/docker.sock</code> （<code class="language-plaintext highlighter-rouge">ec2-user</code>為 user-name，給予 ec2-user docker engine 的 ownership）</li>
+    </ol>
+  </li>
+</ol>
+
+<p><strong>Manager</strong></p>
+
+<ol>
+  <li>開啟一個 swarm、並將所在的機器指定為 manager：<code class="language-plaintext highlighter-rouge">docker swarm init --advertise-addr [manager-ip]</code>
+    <ol>
+      <li>終端機會回傳如何將 worker 加入 swarm 的指令：<code class="language-plaintext highlighter-rouge">docker swarm join --token [token] [manager-ip]:2377</code></li>
+      <li>如果遺忘加入的指令的話，可以在 manager 下這個指令來找回：<code class="language-plaintext highlighter-rouge">docker swarm join-token worker</code></li>
+    </ol>
+  </li>
+</ol>
+
+<p><strong>Worker</strong></p>
+
+<ol>
+  <li>用生成的指令來加入剛剛設定的 swarm：<code class="language-plaintext highlighter-rouge">docker swarm join --token [token] [manager-ip]:2377</code></li>
+</ol>
+
+<p><strong>檢查 swarm 元件</strong></p>
+
+<ol>
+  <li>可以在 manager 下 <code class="language-plaintext highlighter-rouge">docker node ls</code> 檢查 swarm 內的節點是否符合預期</li>
+</ol>]]></content><author><name></name></author><category term="update" /><category term="docker" /><category term="docker-swarm" /><category term="COSCUP" /><summary type="html"><![CDATA[Docker Swarm Introduction Ref: (32) Docker Swarm Introduction - Video 28 - YouTube Structure Scalability &amp; Availability Differences/Definitions of Scalability &amp; Availability Scalability: 當流量變大/變小時，系統中的 server 數可以橫向擴展或縮減 Availability: 當部分的機器無法運作時，能夠確保服務不被中斷（自動開啟新的 instance） Docker Swarm Features Scalability：自動在空間足夠的 worker 上開啟新的 container Availability：以更新 app、降低 downtime 為例 當需要更新 app 版本時，可以讓 load balancer 自動 route 到新版 app 上 漸進式取代所有舊版的 app container Service vs Task 根據 document 的寫法，service 與 task 的差別如下圖： 兩者的區別在於，service 是由 manager 控管的 application，而 task 則是根據 manager 的控制、各個 worker 被指派的任務。 Stack vs Compose 基本上 stack 可以視為升級版的 compose，並且 stack 的設定檔也可以拿 docker-compose file 來執行（只要是 yml 都行） Swarm Mode Implementation Ref: Swarm与Docker的整合——Swarm mode - 知乎 (zhihu.com) Getting started with swarm mode, Docker Documentation → port prerequistive to set up security group Run docker daemon on EC2(amazon linux): Method 2: Assign Ownership to the Docker Unix Socket EC2 特殊設定 SSM53: session manager 參考前一篇文章 Security Group Inbounds Allow TCP port 6000-9000 from my IP Allow all TCP inbound from same security group，好處是可以不用特別設定 docker swarm 指定的傳輸 port 操作步驟 開三台 EC2，其中一台作為 manager、另外兩台作為 worker 安裝 docker 並執行 docker daemon 開啟 docker engine：sudo service docker start sudo chown ec2-user:docker /var/run/docker.sock （ec2-user為 user-name，給予 ec2-user docker engine 的 ownership） Manager 開啟一個 swarm、並將所在的機器指定為 manager：docker swarm init --advertise-addr [manager-ip] 終端機會回傳如何將 worker 加入 swarm 的指令：docker swarm join --token [token] [manager-ip]:2377 如果遺忘加入的指令的話，可以在 manager 下這個指令來找回：docker swarm join-token worker Worker 用生成的指令來加入剛剛設定的 swarm：docker swarm join --token [token] [manager-ip]:2377 檢查 swarm 元件 可以在 manager 下 docker node ls 檢查 swarm 內的節點是否符合預期]]></summary></entry><entry><title type="html">SSH to EC2 with Auto Assigned Certificates</title><link href="https://jqlynchien713.github.io/2022/06/05/aws-ssh.html" rel="alternate" type="text/html" title="SSH to EC2 with Auto Assigned Certificates" /><published>2022-06-05T08:24:00+00:00</published><updated>2022-06-05T08:24:00+00:00</updated><id>https://jqlynchien713.github.io/2022/06/05/aws-ssh</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/06/05/aws-ssh.html"><![CDATA[<p>在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 <code class="language-plaintext highlighter-rouge">ssh i-[EC2 id]</code> 就能連到 EC2 裡ㄌ，比原本的方法方便許多！</p>
+<h2 id="create-qualified-ec2">Create qualified EC2</h2>
+<p>在 EC2 的部分，主要是需要將 Session Manager 的 <em>role</em> 指定給我們想要連線的 EC2</p>
+<ul>
+  <li>Create new EC2 instances(optional)</li>
+  <li>Assigning IAM role with Session Manager access
+    <ul>
+      <li>Policy name: <code class="language-plaintext highlighter-rouge">AmazonEC2RoleforSSM</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="新增使用者">新增使用者</h2>
+<p>同時我們必須要指定，今天連進 EC2 的是哪一個 <em>user</em></p>
+<ul>
+  <li>在 AWS IAM 新增一個 user，該 user 要有 <code class="language-plaintext highlighter-rouge">AdministratorAccess</code></li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">aws configure --profile default</code> 新增一個 default 的 aws user</p>
+
+    <p><img src="/assets/img/key-sec.png" alt="截圖 2022-06-05 15.57.54.png" /></p>
+
+    <ul>
+      <li>USER_KEY = <code class="language-plaintext highlighter-rouge">[Access key ID]</code></li>
+      <li>USER_SECRET = <code class="language-plaintext highlighter-rouge">[Secret access key]</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="設定本地端-ssh">設定本地端 SSH</h2>
+<p>最後就是比較麻煩的 ssh 設定，參考下面的這個 script</p>
+<ul>
+  <li>Ref:  https://github.com/qoomon/aws-ssm-ec2-proxy-command</li>
+  <li>複製 <a href="https://github.com/qoomon/aws-ssm-ec2-proxy-command/blob/master/aws-ssm-ec2-proxy-command.sh">aws-ssm-ec2-proxy-command.sh</a> 到 <code class="language-plaintext highlighter-rouge">.ssh</code> 下</li>
+  <li><code class="language-plaintext highlighter-rouge">chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh</code></li>
+  <li>
+    <p>實際使用：以 default IAM user 連進 EC2</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">AWS_PROFILE</span><span class="o">=</span>default ssh ec2-user@i-0c45c33713e830c9d <span class="se">\</span>
+  <span class="nt">-i</span> <span class="s2">"~/.ssh/id_ed25519"</span> <span class="se">\</span>
+  <span class="nt">-o</span> <span class="nv">ProxyCommand</span><span class="o">=</span><span class="s2">"~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub"</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>加入 <code class="language-plaintext highlighter-rouge">.ssh/config</code></p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>host i-<span class="k">*</span> mi-<span class="k">*</span>
+  User ec2-user
+  IdentityFile ~/.ssh/id_ed25519
+  ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub
+  StrictHostKeyChecking no
+</code></pre></div>    </div>
+  </li>
+  <li>設定完後與 EC2 連線：<code class="language-plaintext highlighter-rouge">ssh i-072f2dd63ae1189e9</code></li>
+</ul>
+
+<p>完成啦！！！🥳🥳🥳🥳</p>]]></content><author><name></name></author><category term="update" /><category term="aws" /><category term="ec2" /><category term="ssh" /><summary type="html"><![CDATA[在開始使用 EC2 後，每次都要找到 EC2 的 certificate 帶入 ssh 的指令裡真ㄉ很麻煩，剛好在上次上課的時候老師教了 ssh 的設定，讓我們在之後連入 EC2 都可以使用原本電腦裡的 ssh key、並透過 ssh i-[EC2 id] 就能連到 EC2 裡ㄌ，比原本的方法方便許多！ Create qualified EC2 在 EC2 的部分，主要是需要將 Session Manager 的 role 指定給我們想要連線的 EC2 Create new EC2 instances(optional) Assigning IAM role with Session Manager access Policy name: AmazonEC2RoleforSSM 新增使用者 同時我們必須要指定，今天連進 EC2 的是哪一個 user 在 AWS IAM 新增一個 user，該 user 要有 AdministratorAccess aws configure --profile default 新增一個 default 的 aws user USER_KEY = [Access key ID] USER_SECRET = [Secret access key] 設定本地端 SSH 最後就是比較麻煩的 ssh 設定，參考下面的這個 script Ref: https://github.com/qoomon/aws-ssm-ec2-proxy-command 複製 aws-ssm-ec2-proxy-command.sh 到 .ssh 下 chmod +x ~/.ssh/aws-ssm-ec2-proxy-command.sh 實際使用：以 default IAM user 連進 EC2 AWS_PROFILE=default ssh ec2-user@i-0c45c33713e830c9d \ -i "~/.ssh/id_ed25519" \ -o ProxyCommand="~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub" 加入 .ssh/config host i-* mi-* User ec2-user IdentityFile ~/.ssh/id_ed25519 ProxyCommand ~/.ssh/aws-ssm-ec2-proxy-command.sh %h %r %p ~/.ssh/id_ed25519.pub StrictHostKeyChecking no 設定完後與 EC2 連線：ssh i-072f2dd63ae1189e9 完成啦！！！🥳🥳🥳🥳]]></summary></entry><entry><title type="html">VPC/Route 53 config &amp;amp; Nginx + EC2 最簡單的 EC2 實作🫠</title><link href="https://jqlynchien713.github.io/2022/05/16/aws-ec2.html" rel="alternate" type="text/html" title="VPC/Route 53 config &amp;amp; Nginx + EC2 最簡單的 EC2 實作🫠" /><published>2022-05-16T13:52:00+00:00</published><updated>2022-05-16T13:52:00+00:00</updated><id>https://jqlynchien713.github.io/2022/05/16/aws-ec2</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/05/16/aws-ec2.html"><![CDATA[<p>最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠）</p>
+
+<h2 id="homework">Homework</h2>
+<p>基本要求</p>
+<ul>
+  <li>VPC 建出來要有 Subnet / Route Table</li>
+  <li>Route 53 要設定出 sub-domain 要有幾筆 CNAME / A</li>
+</ul>
+
+<p>其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。</p>
+
+<h3 id="hw---record">HW - record</h3>
+
+<ol>
+  <li>Create VPC
+    <ul>
+      <li>Route table 新增路由連到外網：
+        <ul>
+          <li>Main route table → Routes → Edit Routes</li>
+          <li>Destination: 0.0.0.0/0 , Target: igw-XXXX</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Create EC2
+    <ol>
+      <li><a href="https://ithelp.ithome.com.tw/articles/10233669">Day4：Amazon Elastic Cloud Compute(EC2)</a></li>
+      <li><a href="https://www.kx.com.tw/aws-usecase-VPC/">【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet</a></li>
+    </ol>
+  </li>
+  <li>Setup Route53
+    <ol>
+      <li><a href="https://ithelp.ithome.com.tw/articles/10234138">Day11：Amazon Route 53</a></li>
+    </ol>
+  </li>
+  <li>Amplify: 以視覺方式建置 Web 前端 UI
+    <ol>
+      <li><a href="https://medium.com/@jameshamann/deploy-your-jekyll-site-using-aws-amplify-with-only-a-few-clicks-8f3dd8f26112">Deploy your Jekyll Site using AWS Amplify — with only a few clicks</a></li>
+      <li>Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain</li>
+    </ol>
+  </li>
+</ol>
+
+<h3 id="問題">問題</h3>
+
+<ol>
+  <li>CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns）</li>
+  <li>Name server 用處：讓其他人得以 query 到我們自己設定的 dns record</li>
+</ol>
+
+<h2 id="nginx-in-ec2">Nginx in EC2</h2>
+
+<blockquote>
+  <p>Prerequisite: EC2 w/ SG allowing http &amp; https</p>
+
+</blockquote>
+
+<h3 id="nginx-config">Nginx Config</h3>
+<p>在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡</p>
+
+<ol>
+  <li>
+    <p>下載 nginx &amp; epel</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>yum <span class="nb">install</span> <span class="nt">-y</span> epel-release
+ <span class="nb">sudo </span>yum <span class="nb">install </span>nginx <span class="nt">-y</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Nginx 相關指令</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>systemctl start nginx
+ <span class="nb">sudo </span>systemctl <span class="nb">enable </span>nginx
+ <span class="nb">sudo </span>systemctl status nginx
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo mkdir</span> /var/www/jc713.staff.5xruby.dev/public_html
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>改變該資料夾的所有權，讓 Nginx 可以存取執行</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo chown</span> <span class="nt">-R</span> nginx: /var/www/jc713.staff.5xruby.dev/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Enable SELinux: <code class="language-plaintext highlighter-rouge">sudo vim /etc/selinux/config</code> 將 disable 改成 enable</p>
+
+    <p>&amp; check <code class="language-plaintext highlighter-rouge">sudo sestatus</code></p>
+  </li>
+  <li>
+    <p>開放 SELinux 存取 Nginx website files</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>setsebool <span class="nt">-P</span> httpd_can_network_connect on
+ <span class="nb">sudo chcon</span> <span class="nt">-Rt</span> httpd_sys_content_t /var/www/
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Nginx 設定檔 <code class="language-plaintext highlighter-rouge">sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf</code></p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> server <span class="o">{</span>
+     listen 80<span class="p">;</span>
+     listen <span class="o">[</span>::]:80<span class="p">;</span>
+
+     root /var/www/example-one.com/public_html<span class="p">;</span>
+
+     index index.html<span class="p">;</span>
+
+     server_name example-one.com www.example-one.com<span class="p">;</span>
+
+     access_log /var/log/nginx/example-one.com.access.log<span class="p">;</span>
+     error_log /var/log/nginx/example-one.com.error.log<span class="p">;</span>
+
+     location / <span class="o">{</span>
+         try_files <span class="nv">$uri</span> <span class="nv">$uri</span>/ <span class="o">=</span>404<span class="p">;</span>
+     <span class="o">}</span>
+ <span class="o">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>驗證 Nginx 設定</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nv">$ </span><span class="nb">sudo </span>nginx <span class="nt">-t</span>
+ nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+ nginx: configuration file /etc/nginx/nginx.conf <span class="nb">test </span>is successful
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Restart Nginx with <code class="language-plaintext highlighter-rouge">sudo systemctl restart nginx</code></p>
+  </li>
+</ol>
+
+<h3 id="nginx-ssl-settings">Nginx SSL settings</h3>
+
+<ol>
+  <li>
+    <p>安裝 Certbot</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nb">sudo </span>apt <span class="nb">install </span>certbot <span class="nt">-y</span>
+ <span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> python-certbot-nginx
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>生成 SSL 憑證 &amp; Nginx 設定</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nv">$ </span><span class="nb">sudo </span>certbot <span class="nt">--nginx</span>
+ <span class="nt">-------</span>
+ 1. You site admin email address
+ 2. Terms of Service agreement.
+ 3. List of domains you need HTTPS <span class="k">for</span><span class="nb">.</span> Certbot will automatically detect this information from the Nginx conf files.
+ 4. HTTP to HTTPS redirection confirmation <span class="o">(</span>it is better to redirect<span class="o">)</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code> listen <span class="o">[</span>::]:443 ssl <span class="nv">ipv6only</span><span class="o">=</span>on<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     listen 443 ssl<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     include /etc/letsencrypt/options-ssl-nginx.conf<span class="p">;</span> <span class="c"># managed by Certbot</span>
+     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem<span class="p">;</span> <span class="c"># managed by Certbot</span>
+ <span class="o">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Done!</p>
+  </li>
+</ol>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://comtechies.com/how-to-install-and-configure-nginx-on-amazon-ec2-rhel-and-ubuntu-instances.html">Ref 1</a></li>
+  <li><a href="https://comtechies.com/nginx-letsencrypt-setup-guide-certbot.html">Ref 2</a></li>
+</ul>]]></content><author><name></name></author><category term="update" /><summary type="html"><![CDATA[最近因為公司開了幾堂 AWS 的教育訓練，課程結束後老闆們有指派回家作業需要完成，因此把實作的歷程紀錄在這邊（不知道我 k8s 那兩篇啥時才能發佈🫠） Homework 基本要求 VPC 建出來要有 Subnet / Route Table Route 53 要設定出 sub-domain 要有幾筆 CNAME / A 其實這次的作業蠻簡單的，因為 VPC 預設就會幫我們開好 Subnet 與 route table，麻煩的點是在要理解 Route 53 的服務到底可以幫我們完成什麼事。 HW - record Create VPC Route table 新增路由連到外網： Main route table → Routes → Edit Routes Destination: 0.0.0.0/0 , Target: igw-XXXX Create EC2 Day4：Amazon Elastic Cloud Compute(EC2) 【AWS 101】邁入AWS的第一步-設定VPC &amp; public subnet Setup Route53 Day11：Amazon Route 53 Amplify: 以視覺方式建置 Web 前端 UI Deploy your Jekyll Site using AWS Amplify — with only a few clicks Amplify console - Domain management: 可以直接在原有的 domain 加上一個 subdomain 問題 CNAME 應用場景：內部開發方便（設在 private zone）、安全性（設定檔都設 CNAME 的 dns） Name server 用處：讓其他人得以 query 到我們自己設定的 dns record Nginx in EC2 Prerequisite: EC2 w/ SG allowing http &amp; https Nginx Config 在設定完上述 Route 53 的 A / CNAME record 之後，覺得如果沒有真的開一個 server 顯示一點東西真的太對不起自己ㄌ吧（蛤），於是就放了一個簡單的頁面進去剛剛開好的 EC2 裡 下載 nginx &amp; epel sudo yum install -y epel-release sudo yum install nginx -y Nginx 相關指令 sudo systemctl start nginx sudo systemctl enable nginx sudo systemctl status nginx 建立資料夾放置要 serve 的靜態檔案，把 index.html 加到裡面 sudo mkdir /var/www/jc713.staff.5xruby.dev/public_html 改變該資料夾的所有權，讓 Nginx 可以存取執行 sudo chown -R nginx: /var/www/jc713.staff.5xruby.dev/ Enable SELinux: sudo vim /etc/selinux/config 將 disable 改成 enable &amp; check sudo sestatus 開放 SELinux 存取 Nginx website files sudo setsebool -P httpd_can_network_connect on sudo chcon -Rt httpd_sys_content_t /var/www/ Nginx 設定檔 sudo vi /etc/nginx/sites-available/jc713.staff.5xruby.dev.conf server { listen 80; listen [::]:80; root /var/www/example-one.com/public_html; index index.html; server_name example-one.com www.example-one.com; access_log /var/log/nginx/example-one.com.access.log; error_log /var/log/nginx/example-one.com.error.log; location / { try_files $uri $uri/ =404; } } 驗證 Nginx 設定 $ sudo nginx -t nginx: the configuration file /etc/nginx/nginx.conf syntax is ok nginx: configuration file /etc/nginx/nginx.conf test is successful Restart Nginx with sudo systemctl restart nginx Nginx SSL settings 安裝 Certbot sudo apt install certbot -y sudo apt-get install -y python-certbot-nginx 生成 SSL 憑證 &amp; Nginx 設定 $ sudo certbot --nginx ------- 1. You site admin email address 2. Terms of Service agreement. 3. List of domains you need HTTPS for. Certbot will automatically detect this information from the Nginx conf files. 4. HTTP to HTTPS redirection confirmation (it is better to redirect) Certbot 會自動在剛剛設定的 Nginx 設定檔裡產生以下資訊 listen [::]:443 ssl ipv6only=on; # managed by Certbot listen 443 ssl; # managed by Certbot ssl_certificate /etc/letsencrypt/live/kartsavings.com/fullchain.pem; # managed by Certbot ssl_certificate_key /etc/letsencrypt/live/kartsavings.com/privkey.pem; # managed by Certbot include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot } Done! Reference Ref 1 Ref 2]]></summary></entry><entry><title type="html">DQN 學習筆記</title><link href="https://jqlynchien713.github.io/2022/02/24/dqn.html" rel="alternate" type="text/html" title="DQN 學習筆記" /><published>2022-02-24T07:51:00+00:00</published><updated>2022-02-24T07:51:00+00:00</updated><id>https://jqlynchien713.github.io/2022/02/24/dqn</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/02/24/dqn.html"><![CDATA[<blockquote>
+  <p>這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了</p>
+</blockquote>
+
+<h2 id="basic-components">Basic Components</h2>
+<p><img src="https://i.imgur.com/Ht2mciG.png" width="300" /></p>
+
+<ul>
+  <li>Env, Actor, Reward Funciton, Episode &amp; Trajectory</li>
+  <li>Trajectory: \(\tau = \{s_i, a_i,\dots\}\) in 1 episode</li>
+  <li>可以計算特定 (action, state) pair 出現的機率\(P_\theta(\tau) = p(s_1)p_\theta(a_1\|s_1)p(s_2\|s_1, a_1)p_\theta(a_2\|s_2)p(s_3\|s_2, a_2)\dots\\=P(s_1)\prod_{t=1}^{T}p_\theta(a_t\|s_t)p(s_{t+1}\|s_t, a_t)\)</li>
+  <li>更新 \(\theta\) 找到最大的 reward: \(\max R(\tau)=\sum_t^Tr_t\)
+    <ul>
+      <li>Env &amp; Reward 為隨機變數，因此只能算期望值： \(\bar{R}_\theta = \sum R(\tau)p_\theta(\tau) = E_{\tau\sim p_\theta(\tau)}[R(\tau)]\)</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="gradient-ascent-maximize-expected-reward">Gradient Ascent: Maximize expected reward</h2>
+<ul>
+  <li>目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率
+   \(\nabla \bar{R_\theta}=\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\)</li>
+  <li>需要不斷從 trajectory set sample data
+<img src="https://i.imgur.com/Q6sCVDq.png" alt="" /></li>
+  <li>Tips for implementation
+    <ul>
+      <li>將 state(input) &amp; action(output) 視為分類問題
+        <ul>
+          <li>一般分類問題 objective function：min cross entropy = max log likelihood</li>
+          <li>轉換成 RL 時要多乘上 reward
+  \(\frac{1}{N}\sum_n^N\sum_t^{T_n} \nabla\log p_\theta(a_t^n\|s_t^n)\Rightarrow\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\)</li>
+        </ul>
+      </li>
+      <li>Add a baseline
+        <ul>
+          <li>情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward</li>
+          <li>解法：讓 reward 不要總是正的 \(\rightarrow\) Reward - baseline(ex. \(\bar{\tau^n}\))</li>
+        </ul>
+      </li>
+      <li>Assign Suitable Credit
+        <ul>
+          <li>問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率</li>
+          <li>解法：只計算執行此 action 後的 reward
+<img src="https://i.imgur.com/8J18po0.png" alt="" /></li>
+          <li>新的更新方式：
+  \(\frac{1}{N}\sum_n^N\sum_t^{T_n} (R(\tau^n)-b)\nabla\log p_\theta(a_t^n\|s_t^n)\)
+            <ul>
+              <li>b 取決於 state</li>
+              <li>\((R(\tau^n)-b)\) 為 advantage function \(A^\theta(s_t, a_t)\)</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="proximal-policy-optimization-ppo">Proximal Policy Optimization, PPO</h2>
+<ul>
+  <li>Off-Policy
+    <ul>
+      <li>On-policy vs. Off-policy
+        <ul>
+          <li>On: agent 和環境互動＋學習</li>
+          <li>Off: 學習的 agent \(\neq\) 互動的 agent，aka agent 在旁邊看別人玩（並學）</li>
+        </ul>
+      </li>
+      <li>On-policy 的問題：更新 model 後需要重新 sample data</li>
+      <li>
+        <p>Off-policy 如何解決：sample \(\pi_{\theta'}\) 來訓練 \(\pi_\theta \rightarrow\) reuse sampled data</p>
+
+        <blockquote>
+          <p><strong>Importance Sampling</strong> <br />
+無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣
+且 sample q 次數夠多則可越趨近於 p(x)
+\(E_{x\sim p}[f(x)]=E_{x\sim q}[f(x)\frac{p(x)}{q(x)}]\)
+\(\frac{p(x)}{q(x)}\)為修正從 q 抽樣的調整項</p>
+        </blockquote>
+      </li>
+      <li>Off-policy 做 gradient ascent 時的調整
+  \(\nabla \bar{R_\theta}=E_{\tau\sim p_\theta(\tau)}[R(\tau)\nabla\log p_\theta(\tau)]\rightarrow E_{\tau\sim p_{\theta'}(\tau)}[\frac{p_\theta(\tau)}{p_{\theta'}(\tau)}R(\tau)\nabla\log p_\theta(\tau)]\)</li>
+      <li>New Objective Function
+  \(J^{\theta'}(\theta)=E_{(s_t,a_t)\sim \pi_{\theta'}(\tau)}[\frac{p_\theta(a_t\|s_t)}{p_{\theta'}(a_t\|s_t)}A^{\theta'}(s_t, a_t)]\)
+        <ul>
+          <li>\(\theta'\): demo</li>
+          <li>\(\theta\): update</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>PPO: 限制 \(\pi\) 與 \(\pi'\) 間的相似度
+    <ul>
+      <li>
+\[J_{PPO}^{\theta'}=J^{\theta'}(\theta)-\beta\cdot KL(\theta, \theta')\]
+      </li>
+    </ul>
+  </li>
+  <li>PPO2:</li>
+</ul>
+
+<h2 id="q-learningvalue-based">Q Learning(Value-based)</h2>
+<p>Learn Critic: 評價 <strong>actor \(\pi\)</strong> 做得多好（而不是 state）</p>
+<ul>
+  <li>State value function \(V^\pi(s)\)
+    <ul>
+      <li>定義：given s，到結束的累積<strong>期望</strong> reward</li>
+      <li>Estimate \(V^\pi(s)\)
+        <ul>
+          <li>Monte-Carlo based
+            <ul>
+              <li>看到 state a 回傳 cumulated gain a</li>
+              <li>不可能掃過所有 state \(\rightarrow V^\pi(s)\) 視為 regression</li>
+            </ul>
+          </li>
+          <li>Temporal-difference appoarch
+\(\because s_t, a_t, r_t \rightarrow s_{t+1}, a_{t+1}, r_{t+1}\)
+<img src="https://i.imgur.com/DiOr0kj.png" alt="" /></li>
+          <li>MC vs. TD: 不同手段估出來的結果可能不同
+            <ul>
+              <li>MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward</li>
+              <li>TD: smaller variance，因為每次只計算一個 r，但 \(V^\pi\) 可能估的不準</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>State-action value function \(Q^\pi(s, a)\)
+    <ul>
+      <li>定義：<span style="background: #FFFF33">在 state s <strong>強制採取 action a</strong>，後續採用 \(\pi\) 的累積期望 reward</span>
+  （agent 不一定會採用 a）
+  <img src="https://i.imgur.com/ONuC5sa.png" alt="" /></li>
+      <li>使用 Q function 更新 \(\pi\) 的流程
+  <img src="https://i.imgur.com/VkljFxs.png" alt="" /></li>
+    </ul>
+  </li>
+  <li>Tips:
+    <ul>
+      <li>Target Network
+   <img src="https://i.imgur.com/bbimeav.png" alt="" /></li>
+      <li>Exploration
+        <ul>
+          <li>原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data</li>
+          <li>解法：
+            <ul>
+              <li>Epsilon Greedy: <img src="https://i.imgur.com/dzvQtq3.png" alt="" /></li>
+              <li>Boltzmann Exploration</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Replay Buffer
+  <img src="https://i.imgur.com/QLBWaPY.jpg" alt="" />
+        <ul>
+          <li>減少和環境互動的次數</li>
+          <li>可提升 batch data diversity</li>
+          <li>Off-policy: 因為過去的 exp 不一定來自 \(\pi\)</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>Advanced Tips
+    <ul>
+      <li>Double DQN
+        <ul>
+          <li>問題：DQN 會高估 Q value
+            <ul>
+              <li>估計誤差 \(\rightarrow\) 選到高估的 action \(\rightarrow\) target值會被設太高</li>
+            </ul>
+          </li>
+          <li>解法：選 action 的 Q function \(\neq\) 算 Q value 的 Q function
+            <ul>
+              <li><img src="https://i.imgur.com/7KlxIx9.png" alt="" /></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>Dueling DQN
+        <ul>
+          <li>改變 network 架構，\(Q(s, a)\rightarrow Q(s, a)=V(s)+A(s, a)\)</li>
+          <li>提升估計 Q value 的效率，不用每個 pair 都被 sample</li>
+          <li><img src="https://i.imgur.com/z1WzTyg.jpg" alt="" /></li>
+          <li>\(\because\) 更新 \(V(s)\) 比 sample 有效率</li>
+          <li>A 的 column 合為 0，確保更新 V</li>
+        </ul>
+      </li>
+      <li>Priority Reply
+        <ul>
+          <li>從 buffer 裡選擇 TD error 較大的 experience set</li>
+          <li>改變 sample data 的 distribution &amp; training process</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>]]></content><author><name></name></author><category term="update" /><category term="research" /><summary type="html"><![CDATA[這是論文要研究ㄉ主題，想說都寫好了那就先放上來好了 Basic Components Env, Actor, Reward Funciton, Episode &amp; Trajectory Trajectory: \(\tau = \{s_i, a_i,\dots\}\) in 1 episode 可以計算特定 (action, state) pair 出現的機率\(P_\theta(\tau) = p(s_1)p_\theta(a_1\|s_1)p(s_2\|s_1, a_1)p_\theta(a_2\|s_2)p(s_3\|s_2, a_2)\dots\\=P(s_1)\prod_{t=1}^{T}p_\theta(a_t\|s_t)p(s_{t+1}\|s_t, a_t)\) 更新 \(\theta\) 找到最大的 reward: \(\max R(\tau)=\sum_t^Tr_t\) Env &amp; Reward 為隨機變數，因此只能算期望值： \(\bar{R}_\theta = \sum R(\tau)p_\theta(\tau) = E_{\tau\sim p_\theta(\tau)}[R(\tau)]\) Gradient Ascent: Maximize expected reward 目標：如果某個 (state, action) pair 能讓 trajectory reward 為正，則增加這項出現的機率 \(\nabla \bar{R_\theta}=\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) 需要不斷從 trajectory set sample data Tips for implementation 將 state(input) &amp; action(output) 視為分類問題 一般分類問題 objective function：min cross entropy = max log likelihood 轉換成 RL 時要多乘上 reward \(\frac{1}{N}\sum_n^N\sum_t^{T_n} \nabla\log p_\theta(a_t^n\|s_t^n)\Rightarrow\frac{1}{N}\sum_n^N\sum_t^{T_n} R(\tau^n)\nabla\log p_\theta(a_t^n\|s_t^n)\) Add a baseline 情境：當遊戲規則裡不會得到負分時；且有些 action 不會被 sample 到，導致 agent 低估這個action 能帶來的 reward 解法：讓 reward 不要總是正的 \(\rightarrow\) Reward - baseline(ex. \(\bar{\tau^n}\)) Assign Suitable Credit 問題：就算某個 pair 的表現是不好的，但在總 reward 為正的情況下，還是會被提升出現的機率 解法：只計算執行此 action 後的 reward 新的更新方式： \(\frac{1}{N}\sum_n^N\sum_t^{T_n} (R(\tau^n)-b)\nabla\log p_\theta(a_t^n\|s_t^n)\) b 取決於 state \((R(\tau^n)-b)\) 為 advantage function \(A^\theta(s_t, a_t)\) Proximal Policy Optimization, PPO Off-Policy On-policy vs. Off-policy On: agent 和環境互動＋學習 Off: 學習的 agent \(\neq\) 互動的 agent，aka agent 在旁邊看別人玩（並學） On-policy 的問題：更新 model 後需要重新 sample data Off-policy 如何解決：sample \(\pi_{\theta'}\) 來訓練 \(\pi_\theta \rightarrow\) reuse sampled data Importance Sampling 無法直接從 p(x) 抽樣的情況下，可藉由另一個分部 q(x) 抽樣 且 sample q 次數夠多則可越趨近於 p(x) \(E_{x\sim p}[f(x)]=E_{x\sim q}[f(x)\frac{p(x)}{q(x)}]\) \(\frac{p(x)}{q(x)}\)為修正從 q 抽樣的調整項 Off-policy 做 gradient ascent 時的調整 \(\nabla \bar{R_\theta}=E_{\tau\sim p_\theta(\tau)}[R(\tau)\nabla\log p_\theta(\tau)]\rightarrow E_{\tau\sim p_{\theta'}(\tau)}[\frac{p_\theta(\tau)}{p_{\theta'}(\tau)}R(\tau)\nabla\log p_\theta(\tau)]\) New Objective Function \(J^{\theta'}(\theta)=E_{(s_t,a_t)\sim \pi_{\theta'}(\tau)}[\frac{p_\theta(a_t\|s_t)}{p_{\theta'}(a_t\|s_t)}A^{\theta'}(s_t, a_t)]\) \(\theta'\): demo \(\theta\): update PPO: 限制 \(\pi\) 與 \(\pi'\) 間的相似度 \[J_{PPO}^{\theta'}=J^{\theta'}(\theta)-\beta\cdot KL(\theta, \theta')\] PPO2: Q Learning(Value-based) Learn Critic: 評價 actor \(\pi\) 做得多好（而不是 state） State value function \(V^\pi(s)\) 定義：given s，到結束的累積期望 reward Estimate \(V^\pi(s)\) Monte-Carlo based 看到 state a 回傳 cumulated gain a 不可能掃過所有 state \(\rightarrow V^\pi(s)\) 視為 regression Temporal-difference appoarch \(\because s_t, a_t, r_t \rightarrow s_{t+1}, a_{t+1}, r_{t+1}\) MC vs. TD: 不同手段估出來的結果可能不同 MC: larger variance，因為每次得到的 state &amp; gain 有抽樣的隨機性，且是計算累積 reward TD: smaller variance，因為每次只計算一個 r，但 \(V^\pi\) 可能估的不準 State-action value function \(Q^\pi(s, a)\) 定義：在 state s 強制採取 action a，後續採用 \(\pi\) 的累積期望 reward （agent 不一定會採用 a） 使用 Q function 更新 \(\pi\) 的流程 Tips: Target Network Exploration 原因：Q function 有點類似 regression（無隨機性），不適合用於 sample data 解法： Epsilon Greedy: Boltzmann Exploration Replay Buffer 減少和環境互動的次數 可提升 batch data diversity Off-policy: 因為過去的 exp 不一定來自 \(\pi\) Advanced Tips Double DQN 問題：DQN 會高估 Q value 估計誤差 \(\rightarrow\) 選到高估的 action \(\rightarrow\) target值會被設太高 解法：選 action 的 Q function \(\neq\) 算 Q value 的 Q function Dueling DQN 改變 network 架構，\(Q(s, a)\rightarrow Q(s, a)=V(s)+A(s, a)\) 提升估計 Q value 的效率，不用每個 pair 都被 sample \(\because\) 更新 \(V(s)\) 比 sample 有效率 A 的 column 合為 0，確保更新 V Priority Reply 從 buffer 裡選擇 TD error 較大的 experience set 改變 sample data 的 distribution &amp; training process]]></summary></entry><entry><title type="html">Jekyll + Utterances 實作 gh-pages 留言功能</title><link href="https://jqlynchien713.github.io/2022/02/23/utterances.html" rel="alternate" type="text/html" title="Jekyll + Utterances 實作 gh-pages 留言功能" /><published>2022-02-23T06:48:00+00:00</published><updated>2022-02-23T06:48:00+00:00</updated><id>https://jqlynchien713.github.io/2022/02/23/utterances</id><content type="html" xml:base="https://jqlynchien713.github.io/2022/02/23/utterances.html"><![CDATA[<p>寫部落格沒有留言的功能好像怪怪ㄉ，上課的時候跟朋友討論研究了一下，發現了 Utterances 這個酷工具可以跟 Jekyll &amp; gh-pages 整合，不用用到資料庫就可以實作出留言ㄉ功能了！</p>
+
+<h2 id="運作原理">運作原理</h2>
+<p>基本上這個外掛是將 github repo 的 issues 整合到靜態網頁本身上，所以當其他使用者在留言時，需要登入 github 的帳戶，並且在其他使用者留言後，這些留言就會更新到 github repo 上的 issues 分頁</p>
+
+<p>這是部落格留言後的樣子
+<img src="/assets/img/comment-demo.png" alt="" /></p>
+
+<p>留言會同步更新到 github issue
+<img src="/assets/img/comment-gh.png" alt="" /></p>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="github-端設定">Github 端設定</h3>
+<ul>
+  <li>
+    <p>需要先在 Github 上 install utterances app，並且在個人設定頁面設定選擇要套用 utterance app 的 repo
+<img src="/assets/img/comment-setup.png" alt="" /></p>
+  </li>
+  <li>
+    <p>接下來可以複製 Utterances 給的 script，在 <code class="language-plaintext highlighter-rouge">[ENTER REPO HERE]</code> 填入想要採用 Utterances 的 <code class="language-plaintext highlighter-rouge">UserName/RepoName</code>。另外 theme 的部分可以到 Utterances 的官網上看，總共有九個主題可以選，我最後選的是跟現在網站比較搭的 github-light</p>
+
+    <div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"https://utteranc.es/client.js"</span>
+        <span class="na">repo=</span><span class="s">"[ENTER REPO HERE]"</span>
+        <span class="na">issue-term=</span><span class="s">"pathname"</span>
+        <span class="na">theme=</span><span class="s">"github-light"</span>
+        <span class="na">crossorigin=</span><span class="s">"anonymous"</span>
+        <span class="na">async</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/script&gt;</span>
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<h3 id="jekyll-端設定">Jekyll 端設定</h3>
+<ul>
+  <li>
+    <p>先設定好 <code class="language-plaintext highlighter-rouge">config.yml</code>，指定留言使用的外掛為 Utterances</p>
+
+    <div class="language-yml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Set which comment system to use</span>
+<span class="na">comments</span><span class="pi">:</span>
+  <span class="c1"># 'disqus' or 'utterances' are available</span>
+  <span class="na">provider</span><span class="pi">:</span>            <span class="s">utterances</span>
+
+<span class="c1"># You must install utterances github app before use.(https://github.com/apps/utterances)</span>
+<span class="c1"># Make sure all variables are set properly. Check below link for detail.</span>
+<span class="c1"># https://utteranc.es/</span>
+<span class="na">utterances</span><span class="pi">:</span>
+  <span class="na">repo</span><span class="pi">:</span>                <span class="s2">"</span><span class="s">jqlynchien713/jqlynchien713.github.io"</span>
+  <span class="na">issue-term</span><span class="pi">:</span>          <span class="s2">"</span><span class="s">pathname"</span>
+  <span class="na">label</span><span class="pi">:</span>               <span class="s2">"</span><span class="s">Comments"</span>
+  <span class="na">theme</span><span class="pi">:</span>               <span class="s2">"</span><span class="s">github-light"</span>
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>接下來可以在 <code class="language-plaintext highlighter-rouge">_includes/my-comment.html</code> 設定留言如何顯示，主要就是貼上剛剛在 Utterances 官網上設定好的 script，這邊不同的地方只有帶入我在 config.yml 裡設定的參數而已</p>
+
+    <div class="language-erb highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  {% assign provider = site.comments.provider | default:"disqus" %}
+  {% if provider == "utterances" %}
+    {% assign utterances = site.utterances %}
+    {% if utterances.repo %}
+      <span class="nt">&lt;script </span><span class="na">src=</span><span class="s">"https://utteranc.es/client.js"</span>
+              <span class="na">repo=</span><span class="s">{{</span> <span class="na">utterances.repo</span> <span class="err">}}</span>
+              <span class="na">issue-term=</span><span class="s">{{</span> <span class="na">utterances.issue-term</span> <span class="err">}}</span>
+              <span class="na">label=</span><span class="s">{{</span> <span class="na">utterances.label</span> <span class="err">}}</span>
+              <span class="na">theme=</span><span class="s">{{</span> <span class="na">utterances.theme</span> <span class="err">}}</span>
+              <span class="na">crossorigin= </span><span class="s">"anonymous"</span>
+              <span class="na">async</span><span class="nt">&gt;</span>
+      <span class="nt">&lt;/script&gt;</span>
+    {% endif %}
+  {% endif %}
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>最後就是把 comment section 加到 post layout 裡、<code class="language-plaintext highlighter-rouge">{{ content }}</code>之後加上下面這三行，讓每篇文章下面都有留言區，這樣就完成了！</p>
+
+    <div class="language-erb highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{%- if site.comments.provider -%}
+  {%- include my-comment.html -%}
+{%- endif -%}
+</code></pre></div>    </div>
+  </li>
+</ul>
+
+<blockquote>
+  <p>上課不認真都在搞這些有的沒的🤡</p>
+</blockquote>
+
+<font color="grey" style="font-size: 24px">Reference</font>
+<ul>
+  <li><a href="https://utteranc.es/">Utterances official site</a></li>
+  <li><a href="https://lazyren.github.io/devlog/use-utterances-for-jekyll-comments.html">Use Utterances/Giscus for Jekyll Comments System</a></li>
+</ul>]]></content><author><name></name></author><category term="update" /><category term="jekyll" /><summary type="html"><![CDATA[寫部落格沒有留言的功能好像怪怪ㄉ，上課的時候跟朋友討論研究了一下，發現了 Utterances 這個酷工具可以跟 Jekyll &amp; gh-pages 整合，不用用到資料庫就可以實作出留言ㄉ功能了！ 運作原理 基本上這個外掛是將 github repo 的 issues 整合到靜態網頁本身上，所以當其他使用者在留言時，需要登入 github 的帳戶，並且在其他使用者留言後，這些留言就會更新到 github repo 上的 issues 分頁 這是部落格留言後的樣子 留言會同步更新到 github issue Configuration Github 端設定 需要先在 Github 上 install utterances app，並且在個人設定頁面設定選擇要套用 utterance app 的 repo 接下來可以複製 Utterances 給的 script，在 [ENTER REPO HERE] 填入想要採用 Utterances 的 UserName/RepoName。另外 theme 的部分可以到 Utterances 的官網上看，總共有九個主題可以選，我最後選的是跟現在網站比較搭的 github-light &lt;script src="https://utteranc.es/client.js" repo="[ENTER REPO HERE]" issue-term="pathname" theme="github-light" crossorigin="anonymous" async&gt; &lt;/script&gt; Jekyll 端設定 先設定好 config.yml，指定留言使用的外掛為 Utterances # Set which comment system to use comments: # 'disqus' or 'utterances' are available provider: utterances # You must install utterances github app before use.(https://github.com/apps/utterances) # Make sure all variables are set properly. Check below link for detail. # https://utteranc.es/ utterances: repo: "jqlynchien713/jqlynchien713.github.io" issue-term: "pathname" label: "Comments" theme: "github-light" 接下來可以在 _includes/my-comment.html 設定留言如何顯示，主要就是貼上剛剛在 Utterances 官網上設定好的 script，這邊不同的地方只有帶入我在 config.yml 裡設定的參數而已 {% assign provider = site.comments.provider | default:"disqus" %} {% if provider == "utterances" %} {% assign utterances = site.utterances %} {% if utterances.repo %} &lt;script src="https://utteranc.es/client.js" repo={{ utterances.repo }} issue-term={{ utterances.issue-term }} label={{ utterances.label }} theme={{ utterances.theme }} crossorigin= "anonymous" async&gt; &lt;/script&gt; {% endif %} {% endif %} 最後就是把 comment section 加到 post layout 裡、{{ content }}之後加上下面這三行，讓每篇文章下面都有留言區，這樣就完成了！ {%- if site.comments.provider -%} {%- include my-comment.html -%} {%- endif -%} 上課不認真都在搞這些有的沒的🤡 Reference Utterances official site Use Utterances/Giscus for Jekyll Comments System]]></summary></entry></feed>
